@@ -11,6 +11,6 @@ def home():
 
     return response  # Directly rendering user input
 
-
 if __name__ == "__main__":
+    app.run(debug=False)
     app.run(debug=True)
