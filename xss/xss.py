@@ -10,7 +10,6 @@ def home():
     response = f"<h1>Welcome, {user_input}!</h1>"  # No input sanitization
 
     return response  # Directly rendering user input
-
-if __name__ == "__main__":
+    app.run(debug=False)  # Ensure debug mode is disabled for production
     app.run(debug=False)
     app.run(debug=True)
