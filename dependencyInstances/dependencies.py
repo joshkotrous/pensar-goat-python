@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -62,13 +64,57 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Function to validate URL for SSRF prevention
+def is_safe_url(url):
+    """Validate URL to prevent SSRF attacks."""
+    if not url:
+        return False
+    
+    # Only allow http and https URLs
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ['http', 'https']:
+        return False
+    
+    # Extract hostname
+    hostname = parsed_url.netloc.split(':')[0].lower()
+    
+    # Block requests to localhost and variants
+    if hostname == 'localhost' or hostname.endswith('.localhost'):
+        return False
+    
+    # Check if hostname is an IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        # Block private IP ranges, loopback, link-local, etc.
+        if (
+            ip.is_private or 
+            ip.is_loopback or 
+            ip.is_link_local or 
+            ip.is_reserved or
+            ip.is_multicast
+        ):
+            return False
+    except ValueError:
+        # Not an IP address
+        pass
+    
+    # Allow the URL if it passes all checks
+    return True
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF by validating URLs before making requests."""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not is_safe_url(url):
+        return "Error: URL validation failed for security reasons", 403
+    
+    try:
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error: Failed to fetch URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
