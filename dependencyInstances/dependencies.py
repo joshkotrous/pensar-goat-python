@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -62,13 +64,51 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Function to check if a URL is safe (not pointing to internal resources)
+def is_url_safe(url):
+    try:
+        parsed_url = urlparse(url)
+        
+        # Ensure URL has a scheme (http or https)
+        if parsed_url.scheme not in ['http', 'https']:
+            return False
+            
+        # Check for common internal hostnames
+        hostname = parsed_url.netloc.split(':')[0].lower()
+        if hostname in ['localhost', '127.0.0.1', '::1'] or hostname.endswith('.internal'):
+            return False
+            
+        # Try to parse the hostname as an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            # Check if it's a private IP
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            # Not an IP address, which is fine
+            pass
+            
+        return True
+    except:
+        return False
+
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate the URL to prevent SSRF
+    if not url or not is_url_safe(url):
+        return "Error: Invalid or disallowed URL", 403
+    
+    try:
+        # Disable redirects to prevent redirect-based SSRF
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        return response.text
+    except requests.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
