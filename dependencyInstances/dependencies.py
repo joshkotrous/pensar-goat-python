@@ -7,6 +7,18 @@ import lxml.etree as ET  # Vulnerable to XXE attacks
 
 app = flask.Flask(__name__)
 
+# Function to escape HTML to prevent XSS
+def html_escape(text):
+    """Escape HTML special characters to prevent XSS"""
+    html_escape_table = {
+        "&": "&amp;",
+        '"': "&quot;",
+        "'": "&#39;",
+        ">": "&gt;",
+        "<": "&lt;",
+    }
+    return "".join(html_escape_table.get(c, c) for c in text)
+
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
 cursor = conn.cursor()
@@ -37,11 +49,11 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Fixed XSS vulnerability by escaping user input"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Escape user input to prevent XSS
+    safe_input = html_escape(user_input)
+    return f"<h1>Welcome, {safe_input}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
