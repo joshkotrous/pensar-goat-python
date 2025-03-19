@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,39 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against credential leakage in redirects"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate that URL is provided
+    if not url:
+        return "Missing URL parameter", 400
+    
+    # Validate URL has acceptable scheme
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ['http', 'https']:
+        return "Invalid URL scheme. Only HTTP and HTTPS are supported.", 400
+    
+    # Get hostname for validation
+    hostname = parsed_url.netloc
+    if ':' in hostname:  # Remove port if present
+        hostname = hostname.split(':')[0]
+    
+    # Block requests to private/internal networks
+    blocked = ['localhost', '127.0.0.1', '0.0.0.0', 'internal', 'local']
+    if hostname in blocked or any(hostname.endswith('.' + b) for b in blocked):
+        return "Access to internal networks is not allowed", 403
+    
+    try:
+        # Disable redirects to prevent credential leakage
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Optionally notify of redirects
+        if response.is_redirect:
+            return "This URL redirects to another location and was blocked for security", 303
+        
+        return response.text
+    except Exception as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
