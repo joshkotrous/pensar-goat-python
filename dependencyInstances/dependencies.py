@@ -65,10 +65,41 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected from SSRF by URL validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL before making request
+    if not url:
+        return "Error: No URL provided", 400
+    
+    try:
+        # Parse the URL to validate components
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        
+        # Ensure the URL has a scheme and netloc
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return "Error: Invalid URL format", 400
+        
+        # Block requests to private IP ranges, localhost, etc.
+        hostname = parsed_url.netloc.split(':')[0].lower()
+        
+        # Check for obvious localhost/internal requests
+        if hostname in ["localhost", "127.0.0.1", "0.0.0.0", "::1"] or \
+           hostname.startswith("192.168.") or hostname.startswith("10.") or \
+           (hostname.startswith("172.") and 
+            len(hostname.split('.')) > 1 and 
+            hostname.split('.')[1].isdigit() and 
+            16 <= int(hostname.split('.')[1]) <= 31) or \
+           hostname.startswith("169.254."):
+            return "Error: Access to internal resources is prohibited", 403
+        
+        # Proceed with the request only if validation passes
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+        
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
