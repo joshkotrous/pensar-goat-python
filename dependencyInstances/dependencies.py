@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,37 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected from SSRF with URL validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Define allowlists for URL schemes and hosts
+    ALLOWED_SCHEMES = {'http', 'https'}
+    ALLOWED_HOSTS = {'api.example.com', 'public-api.example.org'}
+    
+    try:
+        # Parse the URL to extract components
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Validate scheme and host against allowlists
+        if parsed_url.scheme.lower() not in ALLOWED_SCHEMES:
+            return "Error: URL scheme not allowed", 403
+            
+        if parsed_url.netloc.lower() not in ALLOWED_HOSTS:
+            return "Error: Host not allowed", 403
+            
+        # Make the request with additional security measures
+        response = requests.get(
+            url,
+            allow_redirects=False,  # Prevent redirect-based attacks
+            timeout=10,             # Set a timeout to prevent DOS
+        )
+        
+        # Return a generic success message instead of actual content
+        return f"Request to {parsed_url.netloc} completed with status code: {response.status_code}"
+        
+    except Exception as e:
+        # Don't leak exception details to the user
+        return "Error processing request", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
