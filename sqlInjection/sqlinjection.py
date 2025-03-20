@@ -22,7 +22,7 @@ def login(username, password):
     query = (
         f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
     )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
+    print("Executing user authentication query")  # Generic message that doesn't reveal query details
 
     cursor.execute(query)
     user = cursor.fetchone()
