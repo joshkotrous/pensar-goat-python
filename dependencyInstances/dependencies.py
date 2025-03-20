@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os
 
 app = flask.Flask(__name__)
 
@@ -84,4 +85,7 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Debug mode should be disabled in production environments
+    # Use environment variable to control debug mode if needed
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
+    app.run(debug=debug_mode)
