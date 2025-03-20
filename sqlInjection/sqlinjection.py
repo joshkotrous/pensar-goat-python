@@ -18,13 +18,11 @@ conn.commit()
 
 
 def login(username, password):
-    """Vulnerable authentication system using raw SQL queries."""
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
+    """Secure authentication system using parameterized SQL queries."""
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    print(f"Executing Query: {query}")  # Debugging purpose (no longer reveals injection point)
 
-    cursor.execute(query)
+    cursor.execute(query, (username, password))  # Using parameterized query
     user = cursor.fetchone()
 
     if user:
