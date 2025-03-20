@@ -65,10 +65,80 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetch data from validated URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "Missing URL parameter", 400
+    
+    # Configure allowed domains
+    ALLOWED_DOMAINS = ['api.example.com', 'data.example.com']
+    MAX_REDIRECTS = 1  # Limit redirect following
+    
+    try:
+        # Parse and validate URL
+        parsed_url = requests.utils.urlparse(url)
+        
+        # Basic validation
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Invalid URL scheme", 403
+        
+        hostname = parsed_url.netloc.split(':')[0]
+        
+        # Check for internal networks and localhost
+        if (hostname.lower() in ['localhost', '127.0.0.1', '::1'] or 
+            any(hostname.startswith(prefix) for prefix in ['192.168.', '10.', '172.16.', '0.0.0.0'])):
+            return "Access to internal networks is not allowed", 403
+        
+        # Enforce domain whitelist
+        if hostname not in ALLOWED_DOMAINS:
+            return "Domain not in whitelist", 403
+        
+        # Safe request handling
+        remaining_redirects = MAX_REDIRECTS
+        current_url = url
+        
+        while remaining_redirects >= 0:
+            response = requests.get(
+                current_url, 
+                allow_redirects=False,
+                timeout=10,
+                verify=True
+            )
+            
+            # If not a redirect or no more redirects allowed, return response
+            if not (300 <= response.status_code < 400 and remaining_redirects > 0):
+                return response.text
+            
+            # Process redirect
+            redirect_url = response.headers.get('Location')
+            if not redirect_url:
+                return "Invalid redirect", 400
+                
+            # Handle relative URLs
+            if not redirect_url.startswith(('http://', 'https://')):
+                redirect_url = requests.utils.urljoin(current_url, redirect_url)
+                
+            # Validate redirect URL
+            parsed_redirect = requests.utils.urlparse(redirect_url)
+            redirect_hostname = parsed_redirect.netloc.split(':')[0]
+            
+            # Apply same security checks
+            if (redirect_hostname.lower() in ['localhost', '127.0.0.1', '::1'] or 
+                any(redirect_hostname.startswith(prefix) for prefix in ['192.168.', '10.', '172.16.', '0.0.0.0'])):
+                return "Redirect to internal networks is not allowed", 403
+                
+            if redirect_hostname not in ALLOWED_DOMAINS:
+                return "Redirect domain not in whitelist", 403
+                
+            # Update for next iteration
+            current_url = redirect_url
+            remaining_redirects -= 1
+        
+        return "Too many redirects", 400
+        
+    except requests.exceptions.RequestException as e:
+        return f"Request error: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
