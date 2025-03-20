@@ -65,10 +65,24 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secure handling of external URL fetching"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Basic URL validation
+    if not url or not url.startswith(("http://", "https://")):
+        return "Invalid URL", 400
+    
+    try:
+        # Disable automatic redirects to prevent credential leakage
+        response = requests.get(url, allow_redirects=False)
+        
+        # Check if the response is a redirect
+        if response.status_code in (301, 302, 303, 307, 308):
+            return "Redirects are not allowed for security reasons", 403
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
