@@ -65,10 +65,53 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secured against SSRF and credential leakage"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url:
+        return "Missing URL parameter", 400
+    
+    # Ensure URL starts with http:// or https://
+    if not (url.startswith('http://') or url.startswith('https://')):
+        return "Invalid URL scheme. Only HTTP and HTTPS are allowed.", 400
+    
+    # Extract domain for whitelist checking
+    try:
+        # Parse domain from URL
+        if '://' in url:
+            domain_part = url.split('://', 1)[1]
+        else:
+            domain_part = url
+            
+        if '/' in domain_part:
+            domain_part = domain_part.split('/', 1)[0]
+            
+        if ':' in domain_part:
+            domain_part = domain_part.split(':', 1)[0]
+            
+        domain = domain_part.lower()
+    except Exception:
+        return "Invalid URL format", 400
+    
+    # Whitelist allowed domains - this is an example, customize as needed
+    allowed_domains = ['api.example.com', 'public-api.trusted-domain.com']
+    if not any(domain == allowed or domain.endswith('.' + allowed) for allowed in allowed_domains):
+        return f"Domain not in whitelist: {domain}", 403
+    
+    # Make the request with safe settings
+    try:
+        # Set allow_redirects=False to prevent redirect-based attacks
+        # Set timeout to prevent hanging requests
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # If it's a redirect, inform the user
+        if 300 <= response.status_code < 400:
+            return "Request resulted in a redirect which was blocked for security reasons", 403
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error making request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
