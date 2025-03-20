@@ -19,14 +19,11 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Secure against SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
     user = cursor.fetchone()
 
     if user:
