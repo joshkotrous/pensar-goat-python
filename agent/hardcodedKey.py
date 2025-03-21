@@ -5,26 +5,33 @@ OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
+    """A more secure AI agent protected against prompt injection."""
+    # Validate input type
+    if not isinstance(user_input, str):
+        raise ValueError("User input must be a string")
     
-    User: {user_input}
-    AI:
-    """
+    # Instead of embedding user input into a prompt string,
+    # use the proper message structure expected by the API
+    messages = [
+        {"role": "system", "content": "You are an AI assistant. Answer the following user query:"},
+        {"role": "user", "content": user_input}
+    ]
 
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         api_key=OPENAI_API_KEY,  # Insecure key handling
     )
 
     return response["choices"][0]["message"]["content"]
 
 
-# Example vulnerable usage
+# Example usage
 while True:
     user_query = input("Ask the AI: ")
     if user_query.lower() in ["exit", "quit"]:
         break
-    print(ai_agent(user_query))
+    try:
+        print(ai_agent(user_query))
+    except Exception as e:
+        print(f"Error: {e}")
