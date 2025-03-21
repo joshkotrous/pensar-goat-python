@@ -4,6 +4,9 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import re
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -65,10 +68,54 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF and credential leakage"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Input validation: check if URL is provided
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Validate URL format and restrict to HTTP/HTTPS
+    if not re.match(r'^https?://', url):
+        return "Error: Invalid URL scheme. Only HTTP/HTTPS allowed", 400
+    
+    # Block requests to private IP ranges, localhost and internal domains
+    parsed_url = urlparse(url)
+    hostname = parsed_url.hostname
+    
+    # Check if hostname is an IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        # Block private IP ranges
+        if ip.is_private or ip.is_loopback or ip.is_multicast or ip.is_reserved:
+            return "Error: Access to internal networks not allowed", 403
+    except ValueError:
+        # Not an IP address, check for localhost or other restricted domains
+        if hostname.lower() == 'localhost' or hostname.endswith('.local') or hostname.endswith('.internal'):
+            return "Error: Access to internal domains not allowed", 403
+    
+    try:
+        # Disable redirects to prevent redirect-based attacks
+        response = requests.get(url, allow_redirects=False, timeout=5)
+        
+        # Check if response is a redirect
+        if response.status_code in (301, 302, 303, 307, 308):
+            return "Redirects are not allowed", 403
+        
+        # Only return responses from successful requests
+        if response.status_code != 200:
+            return f"Error: Request failed with status code {response.status_code}", response.status_code
+        
+        # Filter the response to prevent sensitive data leakage
+        content_type = response.headers.get('Content-Type', '')
+        if not (content_type.startswith('text/html') or 
+                content_type.startswith('text/plain') or
+                content_type.startswith('application/json')):
+            return "Error: Unsupported content type", 415
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error making request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
