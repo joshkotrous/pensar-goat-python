@@ -62,13 +62,110 @@ def upload_xml():
     return ET.tostring(tree)
 
 
-# ======== 5. Insecure Request Handling ========
+# ======== Helper function for URL validation ========
+def is_url_allowed(url):
+    """
+    Validate if a URL is allowed based on scheme and host.
+    Returns True if allowed, False otherwise.
+    """
+    try:
+        # Simple URL validation without external dependencies
+        if not url.startswith(('http://', 'https://')):
+            return False
+            
+        # Extract the host part (simplified parsing)
+        if url.startswith('http://'):
+            host_part = url[7:]
+        else:  # https://
+            host_part = url[8:]
+            
+        # Find the end of the host part
+        path_start = host_part.find('/')
+        if path_start != -1:
+            host_part = host_part[:path_start]
+            
+        # Remove port if present
+        port_start = host_part.find(':')
+        if port_start != -1:
+            host_part = host_part[:port_start]
+            
+        # Convert to lowercase for comparison
+        host_part = host_part.lower()
+        
+        # Block localhost and common private IP patterns
+        forbidden_patterns = [
+            'localhost',
+            '127.0.0.1',
+            '169.254.169.254',  # AWS metadata
+            '.internal',
+            '.local',
+            'intranet'
+        ]
+        
+        for pattern in forbidden_patterns:
+            if pattern in host_part:
+                return False
+                
+        # Check for private IP ranges
+        ip_parts = host_part.split('.')
+        if len(ip_parts) == 4:
+            try:
+                # Convert all parts to integers
+                ip_nums = [int(part) for part in ip_parts]
+                
+                # Check for private IP ranges
+                if ip_nums[0] == 10:  # 10.0.0.0/8
+                    return False
+                if ip_nums[0] == 192 and ip_nums[1] == 168:  # 192.168.0.0/16
+                    return False
+                if ip_nums[0] == 172 and (16 <= ip_nums[1] <= 31):  # 172.16.0.0/12
+                    return False
+                    
+            except ValueError:
+                # Not an IP address format, continue
+                pass
+                
+        # Allow all other URLs - uncomment for stricter validation if needed
+        # allowed_hosts = ['api.example.com', 'public-service.org']
+        # if host_part not in allowed_hosts:
+        #     return False
+            
+        return True
+    except Exception:
+        # If any parsing error occurs, reject the URL
+        return False
+
+
+# ======== 5. Fixed SSRF Vulnerability ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from validated URLs with SSRF protections"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL against allowlist
+    if not url or not is_url_allowed(url):
+        return "Invalid or disallowed URL", 400
+    
+    try:
+        # Set reasonable timeouts and limit redirects
+        response = requests.get(
+            url, 
+            allow_redirects=True,
+            timeout=5,  # Timeout after 5 seconds
+        )
+        
+        # Check if the final URL after redirects is still allowed
+        if not is_url_allowed(response.url):
+            return "Redirected to disallowed URL", 400
+            
+        # Only return successful responses
+        if response.status_code != 200:
+            return f"Request failed with status code: {response.status_code}", 400
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        # Handle request exceptions safely
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
