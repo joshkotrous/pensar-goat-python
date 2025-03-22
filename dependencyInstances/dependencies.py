@@ -4,6 +4,9 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
+import socket
+import ipaddress
 
 app = flask.Flask(__name__)
 
@@ -65,10 +68,40 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safely handle URL requests with proper validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Basic validation: check if url is provided
+    if not url:
+        return "Error: URL parameter is required", 400
+    
+    # Validate URL scheme (only allow HTTP and HTTPS)
+    parsed_url = urllib.parse.urlparse(url)
+    if parsed_url.scheme not in ['http', 'https']:
+        return "Error: Only HTTP and HTTPS URLs are allowed", 400
+    
+    # Prevent access to private networks
+    hostname = parsed_url.netloc
+    try:
+        ip_addresses = socket.getaddrinfo(hostname, None)
+        for _, _, _, _, (ip, _) in ip_addresses:
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved:
+                return "Error: Access to internal networks is not allowed", 403
+    except (socket.gaierror, UnicodeError, ValueError):
+        return "Error: Invalid hostname", 400
+    
+    # Make the request with limited redirects to prevent credential leakage
+    try:
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # If it's a redirect, only return the redirect location, not following it
+        if response.is_redirect:
+            return f"Redirect to: {response.headers.get('Location')}", 302
+        
+        return response.text
+    except requests.RequestException as e:
+        return f"Error occurred: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
