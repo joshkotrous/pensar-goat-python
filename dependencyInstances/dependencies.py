@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from markupsafe import escape  # Import escape function for XSS prevention
 
 app = flask.Flask(__name__)
 
@@ -37,11 +38,11 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Vulnerable to XSS - Now fixed with proper escaping"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Sanitize user input to prevent XSS
+    safe_input = escape(user_input)
+    return f"<h1>Welcome, {safe_input}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
