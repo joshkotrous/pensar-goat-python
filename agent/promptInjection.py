@@ -1,8 +1,12 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
+def get_api_key():
+    """Retrieve the API key from environment variables."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
+    return api_key
 
 def ai_agent(user_input):
     """A vulnerable AI agent with prompt injection risk."""
@@ -13,14 +17,18 @@ def ai_agent(user_input):
     AI:
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
-    )
-
-    return response["choices"][0]["message"]["content"]
-
+    try:
+        api_key = get_api_key()
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            api_key=api_key,
+        )
+        return response["choices"][0]["message"]["content"]
+    except ValueError as e:
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
 
 # Simulated prompt injection attack
 malicious_input = (
