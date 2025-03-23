@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -62,11 +63,40 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Function to validate URL safety
+def is_safe_url(url):
+    """
+    Check if the URL is safe to request by validating scheme and host.
+    """
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Validate scheme
+        allowed_schemes = ['http', 'https']
+        if parsed_url.scheme not in allowed_schemes:
+            return False
+        
+        # Validate host
+        allowed_hosts = ['example.com', 'api.example.com', 'trusted-domain.com']
+        if parsed_url.netloc not in allowed_hosts:
+            return False
+            
+        return True
+        
+    except (ValueError, AttributeError):
+        return False
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF with URL validation."""
     url = flask.request.args.get("url")
+    
+    # Validate URL before making request
+    if not url or not is_safe_url(url):
+        print(f"Warning: Potential SSRF attempt with URL: {url}")
+        return "Invalid or disallowed URL", 400
+    
     response = requests.get(url, allow_redirects=True)
     return response.text
 
