@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # For URL validation
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,43 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safely fetch content from allowed external URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Only allow http and https URLs
+    if not url.startswith(('http://', 'https://')):
+        return "Error: Only HTTP and HTTPS URLs are supported", 400
+    
+    # Block access to internal networks
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        hostname = parsed_url.netloc
+        
+        # Check for common private IP ranges and hostnames
+        private_patterns = ['127.', '10.', '172.16.', '192.168.', 'localhost', '.local']
+        if any(pattern in hostname for pattern in private_patterns):
+            return "Error: Access to internal networks is not allowed", 403
+    except:
+        return "Error: Invalid URL", 400
+    
+    try:
+        # Make request with limited redirects and timeout
+        response = requests.get(url, allow_redirects=True, timeout=5)
+        
+        # Filter content types
+        content_type = response.headers.get('Content-Type', '')
+        safe_types = ['text/html', 'text/plain', 'application/json', 'image/']
+        
+        if not any(safe_type in content_type.lower() for safe_type in safe_types):
+            return "Error: Content type not allowed", 403
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
