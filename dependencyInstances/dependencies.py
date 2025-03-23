@@ -39,8 +39,9 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
+    escaped_input = flask.escape(user_input)  # Properly escape user input
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {escaped_input}!</h1>"
     )
 
 
