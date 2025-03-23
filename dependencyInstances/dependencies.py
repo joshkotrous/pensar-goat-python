@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
 
 app = flask.Flask(__name__)
 
@@ -63,12 +64,53 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+def is_url_allowed(url):
+    """Validate a URL against an allowlist of allowed domains and protocols."""
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Check for allowed schemes (protocols)
+        allowed_schemes = ['http', 'https']
+        if parsed_url.scheme not in allowed_schemes:
+            return False
+        
+        # Check for allowed domains
+        allowed_domains = ['example.com', 'trusted-domain.com', 'api.trusted-service.org']
+        if parsed_url.netloc not in allowed_domains:
+            return False
+        
+        return True
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetch content from an allowed URL."""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "No URL provided", 400
+    
+    if not is_url_allowed(url):
+        return "URL not allowed for security reasons", 403
+    
+    try:
+        # Set timeout to prevent hanging connections
+        # Disable redirects to prevent redirect-based attacks
+        response = requests.get(
+            url, 
+            allow_redirects=False, 
+            timeout=10
+        )
+        
+        # Check if the response contains sensitive information
+        # This is a basic check and may need to be enhanced
+        if 'password' in response.text.lower() or 'token' in response.text.lower():
+            return "Response contains potentially sensitive data", 403
+        
+        return response.text
+    except requests.exceptions.RequestException:
+        return "Error fetching URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
