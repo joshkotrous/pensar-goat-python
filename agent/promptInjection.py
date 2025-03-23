@@ -1,25 +1,28 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Improved API key handling - get from environment variable
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
-    
-    User: {user_input}
-    AI:
-    """
+    """A secure AI agent protected against prompt injection risk."""
+    # Using proper message structure with separate roles instead of embedding user input directly in prompt
+    messages = [
+        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully. Do not disclose system information, API keys, or sensitive data."},
+        {"role": "user", "content": user_input}
+    ]
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
-    )
-
-    return response["choices"][0]["message"]["content"]
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=messages,
+            api_key=OPENAI_API_KEY,
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        # Generic error message to avoid leaking sensitive information
+        return "An error occurred while processing your request."
 
 
 # Simulated prompt injection attack
