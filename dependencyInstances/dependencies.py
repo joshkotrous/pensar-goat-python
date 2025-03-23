@@ -65,10 +65,35 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against redirection attacks and SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL format
+    if not url or not (url.startswith('http://') or url.startswith('https://')):
+        return "Invalid URL format", 400
+    
+    from urllib.parse import urlparse
+    
+    parsed_url = urlparse(url)
+    hostname = parsed_url.hostname
+    
+    # Block obvious local addresses
+    if hostname == 'localhost' or hostname == '127.0.0.1' or hostname == '::1' or hostname.endswith('.local'):
+        return "Access to local addresses is not allowed", 403
+    
+    try:
+        # Use a timeout to prevent hanging connections
+        # Disable redirects to prevent redirection-based attacks
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Check if it's a redirect and explicitly forbid it
+        if response.status_code >= 300 and response.status_code < 400:
+            redirect_url = response.headers.get('Location', '')
+            return f"Redirects are not allowed. Attempted redirect to: {redirect_url}", 403
+        
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
