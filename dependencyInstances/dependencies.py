@@ -72,15 +72,25 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname, username, password, command="ls"):
+    """Execute a command on an SSH server with proper host key verification"""
+    # Basic validation for the command to prevent arbitrary execution
+    allowed_commands = ["ls", "pwd", "whoami", "date"]
+    if command not in allowed_commands:
+        raise ValueError(f"Command not allowed. Allowed commands: {', '.join(allowed_commands)}")
+    
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    # Load system host keys
+    ssh.load_system_host_keys()
+    # Use RejectPolicy instead of AutoAddPolicy
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
