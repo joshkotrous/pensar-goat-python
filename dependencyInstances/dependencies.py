@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # For URL validation
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,42 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against malicious redirects and untrusted domains"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Input validation
+    if not url:
+        return "Error: URL parameter is required", 400
+    
+    # Validate URL format and domain
+    try:
+        parsed_url = urlparse(url)
+        
+        # Ensure URL has a scheme and netloc
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return "Error: Invalid URL format", 400
+        
+        # Whitelist of trusted domains
+        trusted_domains = ['example.com', 'trusted-domain.com', 'api.example.org']
+        
+        if parsed_url.netloc not in trusted_domains:
+            return f"Error: Domain not in trusted list: {parsed_url.netloc}", 403
+        
+        # Make the request with safety measures
+        response = requests.get(
+            url, 
+            allow_redirects=False,  # Prevent redirects
+            timeout=10              # Set timeout
+        )
+        
+        # Check if it's a redirect response
+        if response.status_code in (301, 302, 303, 307, 308):
+            return "Error: Redirects are not allowed", 403
+        
+        return response.text
+    
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
