@@ -4,18 +4,32 @@ import openai
 OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
-def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
+def sanitize_input(input_text):
+    """Basic sanitization of user input."""
+    if not isinstance(input_text, str):
+        return ""
     
-    User: {user_input}
-    AI:
-    """
+    # Remove control characters that might interfere with prompt formatting
+    sanitized = ''.join(c for c in input_text if ord(c) >= 32 or c == '\n')
+    
+    # Trim excessive whitespace
+    sanitized = ' '.join(sanitized.split())
+    
+    return sanitized
 
+
+def ai_agent(user_input):
+    """A more secure AI agent with prompt injection mitigation."""
+    # Sanitize the input
+    sanitized_input = sanitize_input(user_input)
+    
+    # Use proper message structure with separate system instructions and user input
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully."},
+            {"role": "user", "content": sanitized_input}
+        ],
         api_key=OPENAI_API_KEY,  # Insecure key handling
     )
 
