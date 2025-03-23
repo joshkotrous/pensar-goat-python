@@ -65,10 +65,34 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against open redirects"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Define allowed domains
+    allowed_domains = ["trusted-domain.com", "api.trusted-domain.com"]
+    
+    try:
+        # Import urlparse only where needed to avoid adding a new dependency at the top level
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        
+        # Validate domain
+        if not parsed_url.netloc or not any(parsed_url.netloc == domain or parsed_url.netloc.endswith("." + domain) for domain in allowed_domains):
+            return "Error: URL domain not allowed", 403
+        
+        # Disable redirects to prevent open redirect vulnerabilities
+        response = requests.get(url, allow_redirects=False)
+        
+        # If there's a redirect, inform the user instead of following it
+        if response.is_redirect:
+            return f"Resource moved to: {response.headers.get('Location')}", 302
+        
+        return response.text
+        
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
