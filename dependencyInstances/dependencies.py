@@ -4,6 +4,9 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
+import ipaddress
+import socket
 
 app = flask.Flask(__name__)
 
@@ -65,10 +68,50 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF by validating URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    if not url:
+        return "Error: No URL provided", 400
+    
+    try:
+        # Parse the URL
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Validate scheme
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Error: URL scheme not allowed", 403
+        
+        # Get the hostname
+        hostname = parsed_url.netloc.split(':')[0]  # Remove port if present
+        
+        # Block localhost and common internal hostnames
+        if hostname.lower() in ['localhost', 'internal', 'intranet', '127.0.0.1', '::1']:
+            return "Error: URL not allowed", 403
+            
+        # Check if hostname is an IP
+        try:
+            ip_addr = ipaddress.ip_address(hostname)
+            if ip_addr.is_loopback or ip_addr.is_private or ip_addr.is_reserved or ip_addr.is_multicast:
+                return "Error: URL not allowed", 403
+        except ValueError:
+            # Not a direct IP address, try to resolve it
+            try:
+                ip = socket.gethostbyname(hostname)
+                ip_addr = ipaddress.ip_address(ip)
+                if ip_addr.is_loopback or ip_addr.is_private or ip_addr.is_reserved or ip_addr.is_multicast:
+                    return "Error: URL not allowed", 403
+            except (socket.gaierror, ValueError):
+                # Cannot resolve hostname - could be legitimate or not
+                # We'll continue and let the request library handle it
+                pass
+        
+        # If all checks pass, proceed with the request
+        response = requests.get(url, allow_redirects=True, timeout=10)  # Add timeout for safety
+        return response.text
+        
+    except Exception:
+        # Don't expose specific error details to the client
+        return "Error: Could not fetch URL", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
