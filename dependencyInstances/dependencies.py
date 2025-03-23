@@ -4,8 +4,63 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
+import re
 
 app = flask.Flask(__name__)
+
+# Allowlist configuration for SSRF protection
+ALLOWED_DOMAINS = ["example.com", "api.example.com", "trusted-site.com"]
+ALLOWED_SCHEMES = ["https"]  # Only allow HTTPS for security
+
+def is_url_safe(url):
+    """
+    Validate URL against allowlist and prevent SSRF attacks.
+    Returns True if URL is safe, False otherwise.
+    """
+    if not url:
+        return False
+        
+    try:
+        parsed = urlparse(url)
+        
+        # Check scheme
+        if parsed.scheme not in ALLOWED_SCHEMES:
+            return False
+            
+        # Check domain against allowlist
+        if parsed.netloc not in ALLOWED_DOMAINS:
+            return False
+            
+        # Prevent accessing internal networks
+        if not parsed.netloc or is_internal_ip(parsed.netloc):
+            return False
+            
+        return True
+    except Exception:
+        return False
+
+def is_internal_ip(host):
+    """Check if hostname/IP refers to internal network."""
+    if not host:
+        return True
+        
+    # Remove port number if present
+    if ":" in host:
+        host = host.split(":")[0]
+        
+    # Check for localhost
+    if host == "localhost" or host == "127.0.0.1" or host == "::1":
+        return True
+        
+    # Check for private IPv4 ranges
+    private_ip_pattern = re.compile(
+        r'^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|169\.254\.|127\.)'
+    )
+    if private_ip_pattern.match(host):
+        return True
+        
+    return False
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -65,10 +120,26 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF with URL validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "Error: Missing URL parameter", 400
+        
+    if not is_url_safe(url):
+        return "Error: URL not allowed for security reasons", 403
+        
+    try:
+        # Disable redirects to prevent bypass techniques
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Check if it's a redirect
+        if response.status_code >= 300 and response.status_code < 400:
+            return "Error: Redirects are not allowed", 403
+            
+        return response.text
+    except requests.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
