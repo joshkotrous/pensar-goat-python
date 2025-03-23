@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os
+import socket
 
 app = flask.Flask(__name__)
 
@@ -72,15 +74,52 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname, username, password, command="ls", port=22):
+    """More secure SSH client with proper host key verification"""
+    # Whitelist of trusted servers - add your known servers here
+    TRUSTED_HOSTS = {
+        "trusted-server.com",
+        "localhost",
+        "127.0.0.1",
+    }
+    
+    # Input validation
+    if not hostname or not username or not password or not command:
+        return "Error: Missing required parameters"
+    
+    # Check against whitelist
+    if hostname not in TRUSTED_HOSTS:
+        return f"Error: Connection to {hostname} is not allowed"
+    
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    try:
+        # Load system host keys
+        ssh.load_system_host_keys()
+        
+        # Use RejectPolicy by default (safer than AutoAddPolicy)
+        ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+        
+        # Connect with timeout
+        ssh.connect(hostname, port=port, username=username, password=password, timeout=10)
+        
+        # Execute command
+        stdin, stdout, stderr = ssh.exec_command(command)
+        output = stdout.read().decode('utf-8')
+        error = stderr.read().decode('utf-8')
+        
+        if error:
+            return f"Error executing command: {error}"
+        
+        return output
+    except paramiko.SSHException as e:
+        return f"SSH Error: {str(e)}"
+    except socket.error as e:
+        return f"Connection Error: {str(e)}"
+    except Exception as e:
+        return f"Unexpected Error: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
