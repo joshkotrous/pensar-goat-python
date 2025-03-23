@@ -65,10 +65,17 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Gets content from an external URL as plain text to prevent XSS"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    if not url:
+        return "No URL provided", 400
+    
+    try:
+        response = requests.get(url, allow_redirects=True)
+        # Return the content as plain text to prevent scripts from executing
+        return flask.Response(response.text, content_type='text/plain')
+    except Exception as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
