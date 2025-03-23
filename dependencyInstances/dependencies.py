@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,44 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safety improved - validates URL and disables redirects"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Check if URL is provided
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Validate URL format
+    try:
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme, parsed_url.netloc]):
+            return "Error: Invalid URL format", 400
+        
+        # Only allow http and https schemes
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Error: Only HTTP and HTTPS protocols are supported", 400
+        
+        # Prevent access to private IP ranges and localhost
+        hostname = parsed_url.netloc.split(':')[0]
+        if hostname in ['localhost', '127.0.0.1'] or \
+           hostname.startswith('192.168.') or \
+           hostname.startswith('10.') or \
+           hostname.startswith('172.16.'):
+            return "Error: Access to internal addresses is forbidden", 403
+    except Exception as e:
+        return f"Error: Invalid URL - {str(e)}", 400
+    
+    try:
+        # Disable redirects for security
+        response = requests.get(url, allow_redirects=False)
+        
+        # Check if the response is a redirect
+        if response.is_redirect:
+            return "Error: The URL is attempting to redirect. Redirects are disabled for security.", 400
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error: Request failed - {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
