@@ -72,15 +72,25 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname="example.com", username="user", password="pass", command="ls"):
+    """Execute SSH command with proper host key validation"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load host keys from system's known_hosts file
+    ssh.load_system_host_keys()
+    
+    # Reject connections to hosts whose keys are not known
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    except paramiko.ssh_exception.SSHException as e:
+        # Handle SSH exceptions like unknown host, authentication failures, etc.
+        return f"SSH Error: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
