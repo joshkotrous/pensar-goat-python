@@ -4,8 +4,17 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # Added for URL validation
 
 app = flask.Flask(__name__)
+
+# Define allowed domains for fetch function
+ALLOWED_DOMAINS = [
+    "example.com",
+    "api.example.com",
+    "data.example.com",
+    # Add other trusted domains here
+]
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -65,9 +74,31 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate URL
+    if not url:
+        return "Missing URL parameter", 400
+    
+    # Parse the URL to validate
+    parsed_url = urlparse(url)
+    
+    # Validate scheme (only allow https)
+    if parsed_url.scheme != "https":
+        return "Only HTTPS URLs are allowed", 400
+    
+    # Validate domain against allowlist
+    if parsed_url.netloc not in ALLOWED_DOMAINS:
+        return f"Domain not in allowed list: {parsed_url.netloc}", 403
+    
+    # Make the request (with redirects disabled to prevent bypass)
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check if the response is a redirect
+    if response.status_code >= 300 and response.status_code < 400:
+        return "Redirects are not allowed", 403
+    
     return response.text
 
 
