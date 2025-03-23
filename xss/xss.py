@@ -1,15 +1,18 @@
 from flask import Flask, request
+from markupsafe import escape
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    """Vulnerable to reflected XSS."""
+    """Protected against reflected XSS."""
     user_input = request.args.get("name", "")
-    response = f"<h1>Welcome, {user_input}!</h1>"  # No input sanitization
+    # Sanitize user input to prevent XSS
+    sanitized_input = escape(user_input)
+    response = f"<h1>Welcome, {sanitized_input}!</h1>"
 
-    return response  # Directly rendering user input
+    return response
 
 
 if __name__ == "__main__":
