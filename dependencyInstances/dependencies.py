@@ -4,8 +4,12 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
+
+# Define a whitelist of allowed domains for the fetch function
+ALLOWED_DOMAINS = ["trusted-domain.com", "api.example.org", "data.gov"]
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -65,10 +69,62 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safely fetches content from a whitelisted URL"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Input validation
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Validate URL format and extract domain
+    try:
+        parsed_url = urlparse(url)
+        
+        # Check for valid scheme
+        if parsed_url.scheme not in ["http", "https"]:
+            return "Error: Only HTTP and HTTPS protocols are allowed", 400
+        
+        domain = parsed_url.netloc
+        
+        # Check against whitelist
+        if domain not in ALLOWED_DOMAINS:
+            return f"Error: Domain '{domain}' is not in the whitelist", 403
+        
+        # Make the request with safety measures
+        response = requests.get(
+            url, 
+            allow_redirects=False,  # Disable automatic redirects
+            timeout=10,  # Set timeout for request
+            headers={"User-Agent": "SecureApp/1.0"}  # Use a consistent user agent
+        )
+        
+        # Handle redirects manually if needed
+        if response.status_code in [301, 302, 303, 307, 308]:  # Redirect status codes
+            redirect_url = response.headers.get('Location')
+            # Handle relative URLs
+            if redirect_url.startswith('/'):
+                redirect_url = f"{parsed_url.scheme}://{parsed_url.netloc}{redirect_url}"
+            
+            redirect_parsed = urlparse(redirect_url)
+            redirect_domain = redirect_parsed.netloc
+            
+            # Only follow redirects to allowed domains
+            if redirect_domain in ALLOWED_DOMAINS:
+                response = requests.get(
+                    redirect_url,
+                    allow_redirects=False,
+                    timeout=10,
+                    headers={"User-Agent": "SecureApp/1.0"}
+                )
+            else:
+                return f"Error: Redirect to non-whitelisted domain '{redirect_domain}' blocked", 403
+        
+        return response.text
+    
+    except requests.exceptions.RequestException as e:
+        return f"Error making request: {str(e)}", 500
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
