@@ -55,11 +55,19 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Vulnerable to XXE"""
+    """Protected against XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
-    tree = ET.fromstring(xml_data, parser)
-    return ET.tostring(tree)
+    
+    # Basic validation to ensure we're dealing with XML data
+    if not xml_data or not xml_data.strip().startswith(b'<'):
+        return "Invalid XML data", 400
+        
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    try:
+        tree = ET.fromstring(xml_data, parser)
+        return ET.tostring(tree)
+    except ET.ParseError:
+        return "Invalid XML format", 400
 
 
 # ======== 5. Insecure Request Handling ========
