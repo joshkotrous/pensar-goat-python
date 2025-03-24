@@ -38,7 +38,12 @@ def login(username, password):
     print("Executing authentication query")  
 
     cursor.execute(query, (username, password))
-    user = cursor.fetchone()
+malicious_username = "admin' --"
+malicious_password = "anything"
+
+# Attempt login with SQL injection
+login(malicious_username, malicious_password)
+
 
     if user:
         print("Login successful! Welcome,", user[1])
