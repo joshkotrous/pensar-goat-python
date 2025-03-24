@@ -1,7 +1,12 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Secure API key handling - Load from environment variable
+# Set this environment variable before running:
+# export OPENAI_API_KEY="your-api-key-here"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("Error: OPENAI_API_KEY environment variable not set. Please set this variable with your OpenAI API key.")
 
 
 def ai_agent(user_input):
@@ -16,7 +21,7 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        api_key=OPENAI_API_KEY,
     )
 
     return response["choices"][0]["message"]["content"]
