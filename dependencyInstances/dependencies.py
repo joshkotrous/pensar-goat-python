@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -62,12 +63,69 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Function to validate URLs against allowlist
+def is_url_allowed(url):
+    """
+    Validate URL against allowlist to prevent SSRF.
+    Only allows specific schemes and hosts.
+    """
+    try:
+        parsed_url = urlparse(url)
+        
+        # Define allowlisted schemes and hosts
+        allowed_schemes = ['https', 'http']
+        allowed_domains = ['api.example.com', 'public-api.example.org']
+        
+        # Check if scheme and host are allowed
+        if parsed_url.scheme not in allowed_schemes:
+            return False
+        
+        if parsed_url.netloc not in allowed_domains:
+            return False
+            
+        # Prevent access to private networks
+        if parsed_url.netloc.startswith('127.') or \
+           parsed_url.netloc.startswith('localhost') or \
+           parsed_url.netloc.startswith('10.') or \
+           parsed_url.netloc.startswith('172.16.') or \
+           parsed_url.netloc.startswith('172.17.') or \
+           parsed_url.netloc.startswith('172.18.') or \
+           parsed_url.netloc.startswith('172.19.') or \
+           parsed_url.netloc.startswith('172.20.') or \
+           parsed_url.netloc.startswith('172.21.') or \
+           parsed_url.netloc.startswith('172.22.') or \
+           parsed_url.netloc.startswith('172.23.') or \
+           parsed_url.netloc.startswith('172.24.') or \
+           parsed_url.netloc.startswith('172.25.') or \
+           parsed_url.netloc.startswith('172.26.') or \
+           parsed_url.netloc.startswith('172.27.') or \
+           parsed_url.netloc.startswith('172.28.') or \
+           parsed_url.netloc.startswith('172.29.') or \
+           parsed_url.netloc.startswith('172.30.') or \
+           parsed_url.netloc.startswith('172.31.') or \
+           parsed_url.netloc.startswith('192.168.'):
+            return False
+            
+        return True
+    except Exception:
+        # If URL parsing fails, consider it unsafe
+        return False
+
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF by validating URLs against an allowlist"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate URL against allowlist
+    if not url or not is_url_allowed(url):
+        return "Error: URL not allowed or invalid", 403
+        
+    # Add timeout to prevent long-running requests and disable redirects
+    response = requests.get(url, allow_redirects=False, timeout=10)
+    
+    # Return response with an appropriate content type
     return response.text
 
 
