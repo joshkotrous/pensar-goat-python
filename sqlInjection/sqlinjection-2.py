@@ -28,6 +28,20 @@ def login(username, password):
     user = cursor.fetchone()
 
     if user:
+conn.commit()
+
+
+def login(username, password):
+    """Secure authentication system using parameterized SQL queries."""
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    
+    # Safer debugging that doesn't expose query structure with values
+    print("Executing authentication query")  
+
+    cursor.execute(query, (username, password))
+    user = cursor.fetchone()
+
+    if user:
         print("Login successful! Welcome,", user[1])
     else:
         print("Invalid credentials.")
