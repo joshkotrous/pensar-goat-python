@@ -26,19 +26,7 @@ def login(username, password):
 
     cursor.execute(query)
     user = cursor.fetchone()
-conn.commit()
 
-
-def login(username, password):
-    """Secure authentication system using parameterized queries."""
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    
-    # Using parameterized query instead of string interpolation
-    cursor.execute(query, (username, password))
-    user = cursor.fetchone()
-
-    if user:
-        print("Login successful! Welcome,", user[1])
     if user:
         print("Login successful! Welcome,", user[1])
     else:
@@ -48,11 +36,6 @@ def login(username, password):
 # User input (simulating a hacker's attempt)
 malicious_username = "admin' --"
 malicious_password = "anything"
-malicious_username = "admin' --"
-malicious_password = "anything"
-
-# Attempt login with SQL injection
-login(malicious_username, malicious_password)
 
 # Attempt login with SQL injection
 login(malicious_username, malicious_password)
