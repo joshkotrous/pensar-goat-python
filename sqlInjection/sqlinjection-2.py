@@ -52,4 +52,9 @@ malicious_username = "admin' --"
 malicious_password = "anything"
 
 # Attempt login with SQL injection
+malicious_username = "admin' --"
+malicious_password = "anything"
+
+# Attempt login with SQL injection
 login(malicious_username, malicious_password)
+
