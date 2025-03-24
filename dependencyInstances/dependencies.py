@@ -72,15 +72,51 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname, username, password, command):
+    """Execute a command over SSH with proper security controls
+    
+    Args:
+        hostname: The hostname to connect to
+        username: The SSH username
+        password: The SSH password
+        command: The command to execute
+        
+    Returns:
+        The command output
+        
+    Raises:
+        ValueError: If hostname or command is not allowed
+        paramiko.ssh_exception.SSHException: On SSH connection issues
+    """
+    # Validate the hostname against a whitelist
+    allowed_hosts = ["trusted-server1.com", "trusted-server2.com"]
+    if hostname not in allowed_hosts:
+        raise ValueError(f"Cannot connect to untrusted host: {hostname}")
+    
+    # Validate the command against a whitelist or for dangerous patterns
+    dangerous_patterns = [";", "&&", "||", "`", "$", ">", "<", "|", "rm", "mkfs", "dd"]
+    if any(pattern in command for pattern in dangerous_patterns):
+        raise ValueError(f"Command contains dangerous pattern: {command}")
+    
+    # Only allow certain commands
+    allowed_commands = ["ls", "pwd", "whoami", "date"]
+    command_base = command.split()[0] if command else ""
+    if command_base not in allowed_commands:
+        raise ValueError(f"Command not in whitelist: {command}")
+    
+    # Use SSH with proper key verification
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    # Load known_hosts file
+    ssh.load_system_host_keys()
+    # Use RejectPolicy instead of AutoAddPolicy
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
