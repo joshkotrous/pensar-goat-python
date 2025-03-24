@@ -22,28 +22,10 @@ def login(username, password):
     query = (
         f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
     )
+    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
 
     cursor.execute(query)
     user = cursor.fetchone()
-
-    if user:
-conn.commit()
-
-
-def login(username, password):
-    """Secure authentication system using parameterized SQL queries."""
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    
-    # Safer debugging that doesn't expose query structure with values
-    print("Executing authentication query")  
-
-    cursor.execute(query, (username, password))
-malicious_username = "admin' --"
-malicious_password = "anything"
-
-# Attempt login with SQL injection
-login(malicious_username, malicious_password)
-
 
     if user:
         print("Login successful! Welcome,", user[1])
@@ -56,9 +38,4 @@ malicious_username = "admin' --"
 malicious_password = "anything"
 
 # Attempt login with SQL injection
-malicious_username = "admin' --"
-malicious_password = "anything"
-
-# Attempt login with SQL injection
 login(malicious_username, malicious_password)
-
