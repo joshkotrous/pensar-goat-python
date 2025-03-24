@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -63,11 +64,60 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+def is_safe_url(url):
+    """Validate if a URL is safe to request."""
+    # List of allowed domains
+    allowed_domains = ["example.com", "api.example.com", "trusted-site.org"]
+    
+    try:
+        # Parse the URL to extract domain
+        parsed_url = urlparse(url)
+        
+        # Check if schema and domain are valid
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return False
+            
+        # Check if the domain is in our allowed list
+        domain = parsed_url.netloc
+        return any(domain.endswith(allowed) for allowed in allowed_domains)
+    except Exception:
+        # If URL parsing fails, consider it unsafe
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against credential leakage in redirects"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    if not url:
+        return "URL parameter is required", 400
+    
+    # Validate initial URL
+    if not is_safe_url(url):
+        return "URL not allowed", 403
+    
+    # Make request without following redirects
+    response = requests.get(url, allow_redirects=False)
+    
+    # Handle redirects manually with validation
+    max_redirects = 5
+    redirect_count = 0
+    
+    # Check for redirect status codes (3xx)
+    while 300 <= response.status_code < 400 and redirect_count < max_redirects:
+        redirect_url = response.headers.get('Location')
+        
+        if not redirect_url:
+            break
+            
+        # Validate redirect URL
+        if not is_safe_url(redirect_url):
+            return "Redirect URL not allowed", 403
+        
+        # Follow the redirect
+        response = requests.get(redirect_url, allow_redirects=False)
+        redirect_count += 1
+    
     return response.text
 
 
