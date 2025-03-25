@@ -4,8 +4,6 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse  # For URL parsing
-import re  # For regex pattern matching
 
 app = flask.Flask(__name__)
 
@@ -64,74 +62,36 @@ def upload_xml():
     return ET.tostring(tree)
 
 
-# ======== 5. URL validation for SSRF prevention ========
-def is_url_safe(url):
-    """
-    Validate URL to prevent SSRF attacks.
-    Ensures the URL has an allowed scheme and doesn't point to internal networks.
-    """
-    try:
-        parsed_url = urllib.parse.urlparse(url)
-        
-        # Check for allowed schemes
-        if parsed_url.scheme not in ['http', 'https']:
-            return False
-        
-        # Extract hostname (without port)
-        hostname = parsed_url.hostname
-        if not hostname:
-            return False
-        hostname = hostname.lower()
-        
-        # Block localhost variations
-        if hostname in ['localhost', '127.0.0.1', '0.0.0.0', '::1']:
-            return False
-            
-        # Block private IP ranges
-        private_ip_patterns = [
-            r'^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$',  # 10.0.0.0/8
-            r'^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$',  # 172.16.0.0/12
-            r'^192\.168\.\d{1,3}\.\d{1,3}$',  # 192.168.0.0/16
-            r'^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$',  # 127.0.0.0/8
-            r'^169\.254\.\d{1,3}\.\d{1,3}$',  # 169.254.0.0/16
-        ]
-        
-        # Check against IP patterns
-        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', hostname):
-            for pattern in private_ip_patterns:
-                if re.match(pattern, hostname):
-                    return False
-            
-        return True
-    except Exception:
-        # If any parsing error occurs, consider the URL unsafe
-        return False
-
-
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Fixed SSRF vulnerability with URL validation"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    
-    # Validate URL to prevent SSRF
-    if not url or not is_url_safe(url):
-        return "Invalid or disallowed URL", 400
-        
     response = requests.get(url, allow_redirects=True)
     return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Securely connect to SSH server with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load system host keys
+    ssh.load_system_host_keys()
+    
+    # Reject unknown keys by default
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        # Connect with proper verification
+        ssh.connect("server.example.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.ssh_exception.SSHException as e:
+        # Handle connection errors properly
+        return f"SSH connection error: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
