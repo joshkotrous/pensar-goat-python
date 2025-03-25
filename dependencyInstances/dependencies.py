@@ -46,19 +46,18 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Previously vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Protected from XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    # Disable external entity resolution to prevent XXE attacks
-    parser = ET.XMLParser(resolve_entities=False)
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
