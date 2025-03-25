@@ -37,11 +37,11 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Protected against XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Sanitize user input by escaping HTML special characters
+    escaped_input = flask.escape(user_input)
+    return f"<h1>Welcome, {escaped_input}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
