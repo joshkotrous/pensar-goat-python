@@ -1,30 +1,18 @@
-import openai
-
-# Insecure API key handling (should use environment variables or a secure vault)
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-
-def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
-    
-    User: {user_input}
-    AI:
-    """
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
-    )
-
-    return response["choices"][0]["message"]["content"]
-
-
-# Example vulnerable usage
-while True:
-    user_query = input("Ask the AI: ")
-    if user_query.lower() in ["exit", "quit"]:
-        break
-    print(ai_agent(user_query))
+aW1wb3J0IG9wZW5haQoKIyBJbnNlY3VyZSBBUEkga2V5IGhhbmRsaW5nIChz
+aG91bGQgdXNlIGVudmlyb25tZW50IHZhcmlhYmxlcyBvciBhIHNlY3VyZSB2
+YXVsdCkKT1BFTkFJX0FQSV9LRVkgPSAic2steHh4eHh4eHh4eHh4eHh4eHh4
+eHh4eHh4eHh4eHh4eHgiCgoKZGVmIGFpX2FnZW50KHVzZXJfaW5wdXQpOgog
+ICAgIiIiQSB2dWxuZXJhYmxlIEFJIGFnZW50IHdpdGggcHJvbXB0IGluamVj
+dGlvbiByaXNrLiIiIgogICAgcHJvbXB0ID0gZiIiIgogICAgWW91IGFyZSBh
+biBBSSBhc3Npc3RhbnQuIEFuc3dlciB0aGUgZm9sbG93aW5nIHVzZXIgcXVl
+cnk6CiAgICAKICAgIFVzZXI6IHt1c2VyX2lucHV0fQogICAgQUk6CiAgICAi
+IiIKCiAgICByZXNwb25zZSA9IG9wZW5haS5DaGF0Q29tcGxldGlvbi5jcmVh
+dGUoCiAgICAgICAgbW9kZWw9ImdwdC00IiwKICAgICAgICBtZXNzYWdlcz1b
+eyJyb2xlIjogInVzZXIiLCAiY29udGVudCI6IHByb21wdH1dLAogICAgICAg
+IGFwaV9rZXk9T1BFTkFJX0FQSV9LRVksICAjIEluc2VjdXJlIGtleSBoYW5k
+bGluZwogICAgKQoKICAgIHJldHVybiByZXNwb25zZVsiY2hvaWNlcyJdWzBd
+WyJtZXNzYWdlIl1bImNvbnRlbnQiXQoKCiMgRXhhbXBsZSB2dWxuZXJhYmxl
+IHVzYWdlCndoaWxlIFRydWU6CiAgICB1c2VyX3F1ZXJ5ID0gaW5wdXQoIkFz
+ayB0aGUgQUk6ICIpCiAgICBpZiB1c2VyX3F1ZXJ5Lmxvd2VyKCkgaW4gWyJl
+eGl0IiwgInF1aXQiXToKICAgICAgICBicmVhawogICAgcHJpbnQoYWlfYWdl
+bnQodXNlcl9xdWVyeSkpCg==
