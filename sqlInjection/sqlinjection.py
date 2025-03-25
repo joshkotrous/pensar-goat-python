@@ -18,10 +18,10 @@ conn.commit()
 
 
 def login(username, password):
-    """Secure authentication system using parameterized SQL queries."""
+    """Secure authentication system using parameterized queries."""
     query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    print(f"Executing Query: {query}")  # Debugging purpose
     
-    # Using parameterized query instead of string interpolation
     cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
