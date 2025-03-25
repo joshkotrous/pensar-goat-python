@@ -4,7 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-from urllib.parse import urlparse  # Added for URL parsing
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -66,36 +66,40 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Fetch content from trusted URLs only"""
+    """Securely fetch URL contents with validation"""
     url = flask.request.args.get("url")
     
-    # Validate URL format
+    # Validate URL
     if not url:
-        return "Missing URL parameter", 400
-        
-    # List of allowed domains - add your trusted domains here
-    allowed_domains = ['example.com', 'api.yourdomain.com']
+        return "Error: No URL provided", 400
     
     try:
-        # Parse the URL to extract the domain
+        # Parse the URL
         parsed_url = urlparse(url)
         
-        # Validate URL scheme (only allow http and https)
-        if parsed_url.scheme not in ['http', 'https']:
-            return "Invalid URL scheme. Only HTTP and HTTPS are allowed.", 400
-            
-        domain = parsed_url.netloc
+        # Define allowed schemes and domains
+        ALLOWED_SCHEMES = ['http', 'https']
+        ALLOWED_DOMAINS = ['example.com', 'trusted-domain.com']  # Add your trusted domains
         
-        # Check if the domain is in the allowed list
-        if not domain or domain not in allowed_domains:
-            return f"Domain not allowed: {domain}", 403
+        # Validate scheme
+        if parsed_url.scheme not in ALLOWED_SCHEMES:
+            return f"Error: Scheme not allowed", 403
         
-        # Make request with controlled redirect behavior
+        # Validate domain
+        if parsed_url.netloc not in ALLOWED_DOMAINS:
+            return f"Error: Domain not allowed", 403
+        
+        # Make the request without following redirects
         response = requests.get(url, allow_redirects=False)
         
+        # Check if it's a redirect
+        if 300 <= response.status_code < 400:
+            return "Error: Redirects are not allowed for security reasons", 403
+            
         return response.text
+    
     except Exception as e:
-        return f"Error processing request: {str(e)}", 500
+        return f"Error processing request", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
