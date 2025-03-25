@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -55,9 +56,9 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Protected against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE protection
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +66,36 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetch content from trusted URLs only"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL format
+    if not url:
+        return "Missing URL parameter", 400
+        
+    # List of allowed domains - add your trusted domains here
+    allowed_domains = ['example.com', 'api.yourdomain.com']
+    
+    try:
+        # Parse the URL to extract the domain
+        parsed_url = urlparse(url)
+        
+        # Validate URL scheme (only allow http and https)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Invalid URL scheme. Only HTTP and HTTPS are allowed.", 400
+            
+        domain = parsed_url.netloc
+        
+        # Check if the domain is in the allowed list
+        if not domain or domain not in allowed_domains:
+            return f"Domain not allowed: {domain}", 403
+        
+        # Make request with controlled redirect behavior
+        response = requests.get(url, allow_redirects=False)
+        
+        return response.text
+    except Exception as e:
+        return f"Error processing request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
