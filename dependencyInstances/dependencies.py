@@ -19,12 +19,14 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Fixed SQL Injection vulnerability with parameterized queries"""
+    """Vulnerable to SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    cursor.execute(query, (username, password))
+    query = (
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -63,10 +65,44 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secured against credential leakage in redirects"""
+    from urllib.parse import urlparse, urljoin
+    
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Check if URL is provided
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Validate URL format and domain
+    try:
+        # Whitelist of allowed domains
+        allowed_domains = ["example.com", "api.example.org", "data.example.net"]
+        
+        # Parse and validate URL
+        parsed_url = urlparse(url)
+        
+        # Ensure URL has scheme and netloc
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return "Error: Invalid URL format", 400
+            
+        # Check against whitelist
+        if not any(parsed_url.netloc.endswith(domain) for domain in allowed_domains):
+            return f"Error: Domain not allowed. Allowed domains: {', '.join(allowed_domains)}", 403
+        
+        # Make the request with redirects disabled to prevent leaking to untrusted domains
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Check if redirect occurred and notify user instead of following automatically
+        if 300 <= response.status_code < 400 and 'Location' in response.headers:
+            return f"Redirect detected to: {response.headers['Location']}. Redirects are disabled for security.", 200
+            
+        return response.text
+        
+    except requests.RequestException as e:
+        return f"Error making request: {str(e)}", 500
+    except Exception as e:
+        return f"Error processing request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
