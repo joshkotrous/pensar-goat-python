@@ -1,22 +1,22 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Use environment variable for API key instead of hardcoding
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
-    
-    User: {user_input}
-    AI:
-    """
+    """A more secure AI agent protected against prompt injection."""
+    # Separate system instructions from user input using the proper message structure
+    messages = [
+        {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully."},
+        {"role": "user", "content": user_input}
+    ]
 
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        messages=messages,
+        # API key is now set at the module level from environment variable
     )
 
     return response["choices"][0]["message"]["content"]
