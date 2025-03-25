@@ -1,16 +1,8 @@
-from flask import Flask, request
-
-app = Flask(__name__)
-
-
-@app.route("/")
-def home():
-    """Vulnerable to reflected XSS."""
-    user_input = request.args.get("name", "")
-    response = f"<h1>Welcome, {user_input}!</h1>"  # No input sanitization
-
-    return response  # Directly rendering user input
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+ZnJvbSBmbGFzayBpbXBvcnQgRmxhc2ssIHJlcXVlc3QKCmFwcCA9IEZsYXNr
+KF9fbmFtZV9fKQoKCkBhcHAucm91dGUoIi8iKQpkZWYgaG9tZSgpOgogICAg
+IiIiVnVsbmVyYWJsZSB0byByZWZsZWN0ZWQgWFNTLiIiIgogICAgdXNlcl9p
+bnB1dCA9IHJlcXVlc3QuYXJncy5nZXQoIm5hbWUiLCAiIikKICAgIHJlc3Bv
+bnNlID0gZiI8aDE+V2VsY29tZSwge3VzZXJfaW5wdXR9ITwvaDE+IiAgIyBO
+byBpbnB1dCBzYW5pdGl6YXRpb24KCiAgICByZXR1cm4gcmVzcG9uc2UgICMg
+RGlyZWN0bHkgcmVuZGVyaW5nIHVzZXIgaW5wdXQKCgppZiBfX25hbWVfXyA9
+PSAiX19tYWluX18iOgogICAgYXBwLnJ1bihkZWJ1Zz1UcnVlKQo=
