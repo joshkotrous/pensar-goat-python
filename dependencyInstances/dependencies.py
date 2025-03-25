@@ -4,6 +4,9 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
+import ipaddress
+import socket
 
 app = flask.Flask(__name__)
 
@@ -65,10 +68,45 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Validates URL before fetching content"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url:
+        return "Missing URL parameter", 400
+    
+    try:
+        # Parse the URL
+        parsed_url = urllib.parse.urlparse(url)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Invalid URL scheme", 400
+        
+        hostname = parsed_url.netloc.split(':')[0]
+        
+        # Check if hostname is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_multicast:
+                return "Access to internal networks not allowed", 403
+        except ValueError:
+            # Hostname is not an IP address, try to resolve it
+            try:
+                ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+                if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_multicast:
+                    return "Access to internal networks not allowed", 403
+            except (socket.gaierror, ValueError):
+                # Can't resolve hostname or resolved hostname is not a valid IP
+                pass
+        
+        # Make the request with safety parameters
+        response = requests.get(url, allow_redirects=True, timeout=5, verify=True)
+        return response.text
+    except requests.TooManyRedirects:
+        return "Too many redirects", 400
+    except requests.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 400
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
