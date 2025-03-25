@@ -23,9 +23,10 @@ def login():
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    # Using parameterized query instead of string formatting
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    cursor.execute(query, (username, password))
+    query = (
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -83,4 +84,6 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode)
