@@ -19,7 +19,7 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Fixed SQL Injection vulnerability using parameterized queries"""
+    """Vulnerable to SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
