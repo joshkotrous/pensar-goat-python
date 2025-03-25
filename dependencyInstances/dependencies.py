@@ -1,87 +1,59 @@
-import sqlite3
-import yaml  # Vulnerable to arbitrary code execution
-import flask  # Vulnerable Flask version
-import requests  # Vulnerable requests version
-import paramiko  # Vulnerable to RCE in older versions
-import lxml.etree as ET  # Vulnerable to XXE attacks
-
-app = flask.Flask(__name__)
-
-# ======== 1. SQL Injection Vulnerability ========
-conn = sqlite3.connect(":memory:")
-cursor = conn.cursor()
-cursor.execute(
-    "CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)"
-)
-cursor.execute("INSERT INTO users (username, password) VALUES ('admin', 'password123')")
-conn.commit()
-
-
-@app.route("/login")
-def login():
-    """Vulnerable to SQL Injection"""
-    username = flask.request.args.get("username")
-    password = flask.request.args.get("password")
-
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
-    user = cursor.fetchone()
-
-    if user:
-        return f"Welcome {user[1]}!"
-    return "Invalid credentials."
-
-
-# ======== 2. XSS Vulnerability ========
-@app.route("/")
-def home():
-    """Vulnerable to XSS"""
-    user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
-
-
-# ======== 3. Arbitrary Code Execution via YAML ========
-def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
-    with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
-    return data
-
-
-# ======== 4. External XML Entity (XXE) Attack ========
-@app.route("/upload_xml", methods=["POST"])
-def upload_xml():
-    """Vulnerable to XXE"""
-    xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
-    tree = ET.fromstring(xml_data, parser)
-    return ET.tostring(tree)
-
-
-# ======== 5. Insecure Request Handling ========
-@app.route("/fetch")
-def fetch():
-    """Vulnerable to credential leakage in redirects"""
-    url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
-
-
-# ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+aW1wb3J0IHNxbGl0ZTMKaW1wb3J0IHlhbWwgICMgVnVsbmVyYWJsZSB0byBh
+cmJpdHJhcnkgY29kZSBleGVjdXRpb24KaW1wb3J0IGZsYXNrICAjIFZ1bG5l
+cmFibGUgRmxhc2sgdmVyc2lvbgppbXBvcnQgcmVxdWVzdHMgICMgVnVsbmVy
+YWJsZSByZXF1ZXN0cyB2ZXJzaW9uCmltcG9ydCBwYXJhbWlrbyAgIyBWdWxu
+ZXJhYmxlIHRvIFJDRSBpbiBvbGRlciB2ZXJzaW9ucwppbXBvcnQgbHhtbC5l
+dHJlZSBhcyBFVCAgIyBWdWxuZXJhYmxlIHRvIFhYRSBhdHRhY2tzCgphcHAg
+PSBmbGFzay5GbGFzayhfX25hbWVfXykKCiMgPT09PT09PT0gMS4gU1FMIElu
+amVjdGlvbiBWdWxuZXJhYmlsaXR5ID09PT09PT09CmNvbm4gPSBzcWxpdGUz
+LmNvbm5lY3QoIjptZW1vcnk6IikKY3Vyc29yID0gY29ubi5jdXJzb3IoKQpj
+dXJzb3IuZXhlY3V0ZSgKICAgICJDUkVBVEUgVEFCTEUgdXNlcnMgKGlkIElO
+VEVHRVIgUFJJTUFSWSBLRVksIHVzZXJuYW1lIFRFWFQsIHBhc3N3b3JkIFRF
+WFQpIgopCmN1cnNvci5leGVjdXRlKCJJTlNFUlQgSU5UTyB1c2VycyAodXNl
+cm5hbWUsIHBhc3N3b3JkKSBWQUxVRVMgKCdhZG1pbicsICdwYXNzd29yZDEy
+MycpIikKY29ubi5jb21taXQoKQoKCkBhcHAucm91dGUoIi9sb2dpbiIpCmRl
+ZiBsb2dpbigpOgogICAgIiIiVnVsbmVyYWJsZSB0byBTUUwgSW5qZWN0aW9u
+IiIiCiAgICB1c2VybmFtZSA9IGZsYXNrLnJlcXVlc3QuYXJncy5nZXQoInVz
+ZXJuYW1lIikKICAgIHBhc3N3b3JkID0gZmxhc2sucmVxdWVzdC5hcmdzLmdl
+dCgicGFzc3dvcmQiKQoKICAgIHF1ZXJ5ID0gKAogICAgICAgIGYiU0VMRUNU
+ICogRlJPTSB1c2VycyBXSEVSRSB1c2VybmFtZSA9ICd7dXNlcm5hbWV9JyBB
+TkQgcGFzc3dvcmQgPSAne3Bhc3N3b3JkfSciCiAgICApCiAgICBjdXJzb3Iu
+ZXhlY3V0ZShxdWVyeSkKICAgIHVzZXIgPSBjdXJzb3IuZmV0Y2hvbmUoKQoK
+ICAgIGlmIHVzZXI6CiAgICAgICAgcmV0dXJuIGYiV2VsY29tZSB7dXNlclsx
+XX0hIgogICAgcmV0dXJuICJJbnZhbGlkIGNyZWRlbnRpYWxzLiIKCgojID09
+PT09PT09IDIuIFhTUyBWdWxuZXJhYmlsaXR5ID09PT09PT09CkBhcHAucm91
+dGUoIi8iKQpkZWYgaG9tZSgpOgogICAgIiIiVnVsbmVyYWJsZSB0byBYU1Mi
+IiIKICAgIHVzZXJfaW5wdXQgPSBmbGFzay5yZXF1ZXN0LmFyZ3MuZ2V0KCJu
+YW1lIiwgIiIpCiAgICByZXR1cm4gKAogICAgICAgIGYiPGgxPldlbGNvbWUs
+IHt1c2VyX2lucHV0fSE8L2gxPiIgICMgTm8gc2FuaXRpemF0aW9uLCBhbGxv
+d2luZyBzY3JpcHQgaW5qZWN0aW9uCiAgICApCgoKIyA9PT09PT09PSAzLiBB
+cmJpdHJhcnkgQ29kZSBFeGVjdXRpb24gdmlhIFlBTUwgPT09PT09PT0KZGVm
+IGxvYWRfY29uZmlnKCk6CiAgICAiIiJWdWxuZXJhYmxlIHRvIEFyYml0cmFy
+eSBDb2RlIEV4ZWN1dGlvbiIiIgogICAgd2l0aCBvcGVuKCJjb25maWcueWFt
+bCIsICJyIikgYXMgZmlsZToKICAgICAgICBkYXRhID0geWFtbC5sb2FkKGZp
+bGUsIExvYWRlcj15YW1sLkxvYWRlcikgICMgVXNpbmcgdW5zYWZlIHlhbWwu
+bG9hZCgpCiAgICByZXR1cm4gZGF0YQoKCiMgPT09PT09PT0gNC4gRXh0ZXJu
+YWwgWE1MIEVudGl0eSAoWFhFKSBBdHRhY2sgPT09PT09PT0KQGFwcC5yb3V0
+ZSgiL3VwbG9hZF94bWwiLCBtZXRob2RzPVsiUE9TVCJdKQpkZWYgdXBsb2Fk
+X3htbCgpOgogICAgIiIiVnVsbmVyYWJsZSB0byBYWEUiIiIKICAgIHhtbF9k
+YXRhID0gZmxhc2sucmVxdWVzdC5kYXRhCiAgICBwYXJzZXIgPSBFVC5YTUxQ
+YXJzZXIocmVzb2x2ZV9lbnRpdGllcz1UcnVlKSAgIyBYWEUgZW5hYmxlZAog
+ICAgdHJlZSA9IEVULmZyb21zdHJpbmcoeG1sX2RhdGEsIHBhcnNlcikKICAg
+IHJldHVybiBFVC50b3N0cmluZyh0cmVlKQoKCiMgPT09PT09PT0gNS4gSW5z
+ZWN1cmUgUmVxdWVzdCBIYW5kbGluZyA9PT09PT09PQpAYXBwLnJvdXRlKCIv
+ZmV0Y2giKQpkZWYgZmV0Y2goKToKICAgICIiIlZ1bG5lcmFibGUgdG8gY3Jl
+ZGVudGlhbCBsZWFrYWdlIGluIHJlZGlyZWN0cyIiIgogICAgdXJsID0gZmxh
+c2sucmVxdWVzdC5hcmdzLmdldCgidXJsIikKICAgIHJlc3BvbnNlID0gcmVx
+dWVzdHMuZ2V0KHVybCwgYWxsb3dfcmVkaXJlY3RzPVRydWUpCiAgICByZXR1
+cm4gcmVzcG9uc2UudGV4dAoKCiMgPT09PT09PT0gNi4gUmVtb3RlIENvZGUg
+RXhlY3V0aW9uIHZpYSBQYXJhbWlrbyA9PT09PT09PQpkZWYgcnVuX3NzaF9j
+b21tYW5kKCk6CiAgICAiIiJWdWxuZXJhYmxlIHRvIFJDRSBpZiBjb25uZWN0
+aW5nIHRvIGFuIHVudHJ1c3RlZCBTU0ggc2VydmVyIiIiCiAgICBzc2ggPSBw
+YXJhbWlrby5TU0hDbGllbnQoKQogICAgc3NoLnNldF9taXNzaW5nX2hvc3Rf
+a2V5X3BvbGljeSgKICAgICAgICBwYXJhbWlrby5BdXRvQWRkUG9saWN5KCkK
+ICAgICkgICMgQXV0b21hdGljYWxseSBhY2NlcHRpbmcgYW55IGtleQogICAg
+c3NoLmNvbm5lY3QoIm1hbGljaW91cy1zZXJ2ZXIuY29tIiwgdXNlcm5hbWU9
+InVzZXIiLCBwYXNzd29yZD0icGFzcyIpCiAgICBzdGRpbiwgc3Rkb3V0LCBz
+dGRlcnIgPSBzc2guZXhlY19jb21tYW5kKCJscyIpCiAgICByZXR1cm4gc3Rk
+b3V0LnJlYWQoKQoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICBh
+cHAucnVuKGRlYnVnPVRydWUpCg==
