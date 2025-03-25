@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -55,9 +56,9 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Previously vulnerable to XXE, now fixed"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +66,47 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Securely fetches content from a validated URL
+    
+    Implements protection against SSRF by:
+    1. Validating the URL against a whitelist of allowed domains
+    2. Ensuring only HTTP/HTTPS schemes are used
+    3. Preventing redirects that could bypass security controls
+    4. Adding timeouts to prevent long-running requests
+    """
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url:
+        return "Error: No URL provided", 400
+    
+    # Implement a whitelist of allowed domains
+    allowed_domains = ['example.com', 'api.example.org', 'trusted-domain.net']
+    
+    # Parse the URL to extract the domain
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        domain = parsed_url.netloc
+        
+        # Check if domain is in whitelist
+        if not domain or not any(domain == allowed_domain or domain.endswith('.' + allowed_domain) for allowed_domain in allowed_domains):
+            return f"Error: Access to domain '{domain}' is not allowed", 403
+        
+        # Check for non-http(s) schemes (like file://, ftp://, etc.)
+        if parsed_url.scheme not in ['http', 'https']:
+            return f"Error: Scheme '{parsed_url.scheme}' is not allowed", 403
+            
+        # Make the request with redirects disabled to prevent SSRF through redirect chains
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Check if the response is a redirect
+        if response.status_code in [301, 302, 303, 307, 308]:
+            return "Redirects are not allowed for security reasons", 403
+            
+        return response.text
+        
+    except requests.exceptions.RequestException as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
