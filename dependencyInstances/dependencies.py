@@ -4,8 +4,6 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import ipaddress
-from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -64,67 +62,27 @@ def upload_xml():
     return ET.tostring(tree)
 
 
-# Function to validate URLs to prevent SSRF
-def is_valid_url(url):
-    """Validate URL against security criteria to prevent SSRF."""
-    try:
-        # Parse the URL
-        parsed = urlparse(url)
-        
-        # Check for allowed schemes
-        if parsed.scheme not in ['http', 'https']:
-            return False
-            
-        # Extract the hostname
-        hostname = parsed.netloc.split(':')[0].lower()
-        
-        # Check if hostname is an IP address
-        try:
-            ip = ipaddress.ip_address(hostname)
-            # Block private, loopback, link-local and unspecified addresses
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
-                return False
-        except ValueError:
-            # Not an IP address, continue with hostname checks
-            pass
-            
-        # Block localhost and internal domains
-        if (hostname == 'localhost' or
-            hostname.endswith('.local') or
-            hostname.endswith('.internal')):
-            return False
-            
-        return True
-    except:
-        return False
-
-
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Protected against SSRF by validating URLs"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    
-    if not url or not is_valid_url(url):
-        return "Invalid or unauthorized URL request", 400
-        
-    try:
-        response = requests.get(url, allow_redirects=True, timeout=10)  # Adding timeout for safety
-        return response.text
-    except requests.exceptions.RequestException:
-        return "Error fetching the requested URL", 500
+    response = requests.get(url, allow_redirects=True)
+    return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Connects to SSH server with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    ssh.load_system_host_keys()  # Load system host keys for verification
+    try:
+        # Connect to server (ensure it's a trusted server)
+        ssh.connect("trusted-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
