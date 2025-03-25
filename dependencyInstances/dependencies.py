@@ -4,7 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse  # Added for URL parsing
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -63,50 +64,55 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Function to validate URLs to prevent SSRF
+def is_valid_url(url):
+    """Validate URL against security criteria to prevent SSRF."""
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        
+        # Check for allowed schemes
+        if parsed.scheme not in ['http', 'https']:
+            return False
+            
+        # Extract the hostname
+        hostname = parsed.netloc.split(':')[0].lower()
+        
+        # Check if hostname is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            # Block private, loopback, link-local and unspecified addresses
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
+                return False
+        except ValueError:
+            # Not an IP address, continue with hostname checks
+            pass
+            
+        # Block localhost and internal domains
+        if (hostname == 'localhost' or
+            hostname.endswith('.local') or
+            hostname.endswith('.internal')):
+            return False
+            
+        return True
+    except:
+        return False
+
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Securely fetches content from a validated URL
-    
-    Implements protection against SSRF by:
-    1. Validating the URL against a whitelist of allowed domains
-    2. Ensuring only HTTP/HTTPS schemes are used
-    3. Preventing redirects that could bypass security controls
-    4. Adding timeouts to prevent long-running requests
-    """
+    """Protected against SSRF by validating URLs"""
     url = flask.request.args.get("url")
     
-    # Validate URL
-    if not url:
-        return "Error: No URL provided", 400
-    
-    # Implement a whitelist of allowed domains
-    allowed_domains = ['example.com', 'api.example.org', 'trusted-domain.net']
-    
-    # Parse the URL to extract the domain
+    if not url or not is_valid_url(url):
+        return "Invalid or unauthorized URL request", 400
+        
     try:
-        parsed_url = urllib.parse.urlparse(url)
-        domain = parsed_url.netloc
-        
-        # Check if domain is in whitelist
-        if not domain or not any(domain == allowed_domain or domain.endswith('.' + allowed_domain) for allowed_domain in allowed_domains):
-            return f"Error: Access to domain '{domain}' is not allowed", 403
-        
-        # Check for non-http(s) schemes (like file://, ftp://, etc.)
-        if parsed_url.scheme not in ['http', 'https']:
-            return f"Error: Scheme '{parsed_url.scheme}' is not allowed", 403
-            
-        # Make the request with redirects disabled to prevent SSRF through redirect chains
-        response = requests.get(url, allow_redirects=False, timeout=10)
-        
-        # Check if the response is a redirect
-        if response.status_code in [301, 302, 303, 307, 308]:
-            return "Redirects are not allowed for security reasons", 403
-            
+        response = requests.get(url, allow_redirects=True, timeout=10)  # Adding timeout for safety
         return response.text
-        
-    except requests.exceptions.RequestException as e:
-        return f"Error processing URL: {str(e)}", 400
+    except requests.exceptions.RequestException:
+        return "Error fetching the requested URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
