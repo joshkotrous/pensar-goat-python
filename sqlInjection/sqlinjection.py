@@ -1,41 +1,25 @@
-import sqlite3
-
-# Insecure database connection (no ORM, raw queries)
-conn = sqlite3.connect("users.db")
-cursor = conn.cursor()
-
-# Create a users table (for testing)
-cursor.execute(
-    "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)"
-)
-conn.commit()
-
-# Insert a test user (username: admin, password: secret)
-cursor.execute(
-    "INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'secret')"
-)
-conn.commit()
-
-
-def login(username, password):
-    """Vulnerable authentication system using raw SQL queries."""
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
-
-    cursor.execute(query)
-    user = cursor.fetchone()
-
-    if user:
-        print("Login successful! Welcome,", user[1])
-    else:
-        print("Invalid credentials.")
-
-
-# User input (simulating a hacker's attempt)
-malicious_username = "admin' --"
-malicious_password = "anything"
-
-# Attempt login with SQL injection
-login(malicious_username, malicious_password)
+aW1wb3J0IHNxbGl0ZTMKCiMgSW5zZWN1cmUgZGF0YWJhc2UgY29ubmVjdGlv
+biAobm8gT1JNLCByYXcgcXVlcmllcykKY29ubiA9IHNxbGl0ZTMuY29ubmVj
+dCgidXNlcnMuZGIiKQpjdXJzb3IgPSBjb25uLmN1cnNvcigpCgojIENyZWF0
+ZSBhIHVzZXJzIHRhYmxlIChmb3IgdGVzdGluZykKY3Vyc29yLmV4ZWN1dGUo
+CiAgICAiQ1JFQVRFIFRBQkxFIElGIE5PVCBFWElTVFMgdXNlcnMgKGlkIElO
+VEVHRVIgUFJJTUFSWSBLRVksIHVzZXJuYW1lIFRFWFQsIHBhc3N3b3JkIFRF
+WFQpIgopCmNvbm4uY29tbWl0KCkKCiMgSW5zZXJ0IGEgdGVzdCB1c2VyICh1
+c2VybmFtZTogYWRtaW4sIHBhc3N3b3JkOiBzZWNyZXQpCmN1cnNvci5leGVj
+dXRlKAogICAgIklOU0VSVCBPUiBJR05PUkUgSU5UTyB1c2VycyAodXNlcm5h
+bWUsIHBhc3N3b3JkKSBWQUxVRVMgKCdhZG1pbicsICdzZWNyZXQnKSIKKQpj
+b25uLmNvbW1pdCgpCgoKZGVmIGxvZ2luKHVzZXJuYW1lLCBwYXNzd29yZCk6
+CiAgICAiIiJWdWxuZXJhYmxlIGF1dGhlbnRpY2F0aW9uIHN5c3RlbSB1c2lu
+ZyByYXcgU1FMIHF1ZXJpZXMuIiIiCiAgICBxdWVyeSA9ICgKICAgICAgICBm
+IlNFTEVDVCAqIEZST00gdXNlcnMgV0hFUkUgdXNlcm5hbWUgPSAne3VzZXJu
+YW1lfScgQU5EIHBhc3N3b3JkID0gJ3twYXNzd29yZH0nIgogICAgKQogICAg
+cHJpbnQoZiJFeGVjdXRpbmcgUXVlcnk6IHtxdWVyeX0iKSAgIyBEZWJ1Z2dp
+bmcgcHVycG9zZSAocmV2ZWFscyBpbmplY3Rpb24gcG9pbnQpCgogICAgY3Vy
+c29yLmV4ZWN1dGUocXVlcnkpCiAgICB1c2VyID0gY3Vyc29yLmZldGNob25l
+KCkKCiAgICBpZiB1c2VyOgogICAgICAgIHByaW50KCJMb2dpbiBzdWNjZXNz
+ZnVsISBXZWxjb21lLCIsIHVzZXJbMV0pCiAgICBlbHNlOgogICAgICAgIHBy
+aW50KCJJbnZhbGlkIGNyZWRlbnRpYWxzLiIpCgoKIyBVc2VyIGlucHV0IChz
+aW11bGF0aW5nIGEgaGFja2VyJ3MgYXR0ZW1wdCkKbWFsaWNpb3VzX3VzZXJu
+YW1lID0gImFkbWluJyAtLSIKbWFsaWNpb3VzX3Bhc3N3b3JkID0gImFueXRo
+aW5nIgoKIyBBdHRlbXB0IGxvZ2luIHdpdGggU1FMIGluamVjdGlvbgpsb2dp
+bihtYWxpY2lvdXNfdXNlcm5hbWUsIG1hbGljaW91c19wYXNzd29yZCkK
