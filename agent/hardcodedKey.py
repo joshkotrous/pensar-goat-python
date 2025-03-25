@@ -1,30 +1,35 @@
 import openai
-import os
 
-# Secure API key handling using environment variables
-# Set your API key as an environment variable: export OPENAI_API_KEY="your-api-key"
-try:
-    OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-except KeyError:
-    raise ValueError("Please set the OPENAI_API_KEY environment variable")
+# Insecure API key handling (should use environment variables or a secure vault)
+OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
 def ai_agent(user_input):
-    """An AI agent that answers user queries."""
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
+    """A more secure AI agent implementation."""
     
-    User: {user_input}
-    AI:
-    """
+    # Input validation
+    if not user_input or not isinstance(user_input, str):
+        return "Please provide a valid input."
+    
+    if len(user_input) > 4000:  # Reasonable length limit
+        return "Input exceeds maximum allowed length."
+    
+    # Use proper message structure with separate system and user messages
+    messages = [
+        {"role": "system", "content": "You are an AI assistant. Answer the following user query."},
+        {"role": "user", "content": user_input}
+    ]
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,
-    )
-
-    return response["choices"][0]["message"]["content"]
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=messages,
+            api_key=OPENAI_API_KEY,  # Insecure key handling
+        )
+        
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error processing request: {str(e)}"
 
 
 # Example usage
