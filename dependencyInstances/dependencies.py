@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
 
 app = flask.Flask(__name__)
 
@@ -63,11 +64,51 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+# Allowlist of permitted schemes and domains
+ALLOWED_SCHEMES = {'http', 'https'}
+ALLOWED_DOMAINS = {'example.com', 'trusted-domain.com', 'api.public-service.org'}
+
+def is_valid_url(url):
+    """Validate if a URL is allowed based on scheme and domain allowlists"""
+    try:
+        # Parse the URL
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Check scheme
+        if parsed_url.scheme.lower() not in ALLOWED_SCHEMES:
+            return False
+            
+        # Extract domain
+        domain = parsed_url.netloc.lower()
+        # Remove port if present
+        if ':' in domain:
+            domain = domain.split(':')[0]
+            
+        # Check if domain is in allowlist
+        if domain not in ALLOWED_DOMAINS:
+            return False
+            
+        # URL is valid
+        return True
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fixed to prevent SSRF attacks"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate URL against allowlist
+    if not is_valid_url(url):
+        return "Invalid or unauthorized URL", 403
+    
+    # Make request with security measures
+    response = requests.get(
+        url, 
+        allow_redirects=False,  # Prevent redirect-based attacks
+        timeout=10  # Set timeout to prevent denial-of-service
+    )
+    
     return response.text
 
 
