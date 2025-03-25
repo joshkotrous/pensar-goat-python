@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
+import ipaddress
 
 app = flask.Flask(__name__)
 
@@ -63,12 +65,72 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+def is_url_safe(url):
+    """Check if a URL is safe to access"""
+    try:
+        parsed_url = urlparse(url)
+        
+        # Ensure URL has a scheme and netloc
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return False
+        
+        # Only allow http and https schemes
+        if parsed_url.scheme not in ['http', 'https']:
+            return False
+        
+        # Block access to private networks
+        hostname = parsed_url.netloc.split(':')[0]
+        if hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
+            return False
+            
+        # Check for private IP ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            # Not an IP address, which is fine
+            pass
+            
+        return True
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Securely fetch content from external URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "Missing URL parameter", 400
+    
+    if not is_url_safe(url):
+        return "Invalid or disallowed URL", 403
+    
+    try:
+        # Don't follow redirects automatically
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Handle redirects manually with validation
+        redirect_count = 0
+        max_redirects = 5
+        
+        while (response.status_code in [301, 302, 303, 307, 308] and 
+               redirect_count < max_redirects):
+            redirect_url = response.headers.get('Location')
+            
+            # Validate the redirect URL
+            if not is_url_safe(redirect_url):
+                return "Redirect to disallowed URL", 403
+                
+            # Follow the redirect
+            response = requests.get(redirect_url, allow_redirects=False, timeout=10)
+            redirect_count += 1
+            
+        return response.text
+        
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
