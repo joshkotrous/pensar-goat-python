@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -55,20 +57,64 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Secure against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
+
+
+def is_url_safe(url):
+    """
+    Check if a URL is safe to request by verifying it doesn't point to internal networks.
+    Returns True if safe, False otherwise.
+    """
+    if not url:
+        return False
+    
+    parsed_url = urlparse(url)
+    
+    # Ensure the scheme is http or https
+    if parsed_url.scheme not in ('http', 'https'):
+        return False
+    
+    # Check if the URL points to a private IP
+    try:
+        hostname = parsed_url.hostname
+        if hostname:
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                    return False
+            except ValueError:
+                # Hostname is not an IP address, proceed with other checks
+                pass
+            
+            # Prevent localhost access via hostname
+            if hostname == 'localhost' or hostname.startswith('127.') or hostname.endswith('.local'):
+                return False
+    except Exception:
+        # If any error occurs during validation, consider it unsafe
+        return False
+    
+    return True
 
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secured against SSRF by validating URLs and disabling redirects"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not is_url_safe(url):
+        return "Invalid or unsafe URL", 400
+    
+    try:
+        # Disable redirects for security, set a short timeout
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error processing request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
