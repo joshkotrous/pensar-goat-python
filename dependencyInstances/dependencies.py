@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
+import ipaddress
 
 app = flask.Flask(__name__)
 
@@ -55,18 +57,56 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Protected against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
 
 # ======== 5. Insecure Request Handling ========
+def is_safe_url(url):
+    """Validates if a URL is safe to request."""
+    if not url:
+        return False
+    
+    # Basic URL validation using urllib.parse
+    try:
+        parsed_url = urlparse(url)
+        
+        # Check scheme (protocol)
+        if parsed_url.scheme not in ['http', 'https']:
+            return False
+        
+        # Check if URL is for an internal resource
+        netloc = parsed_url.netloc.lower()
+        hostname = netloc.split(':')[0]  # Remove port if present
+        
+        # Block localhost and common internal domains
+        if not hostname or hostname in ['localhost', '127.0.0.1', '::1'] or hostname.endswith('.internal'):
+            return False
+            
+        # For IP addresses, check if they're private
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_multicast or ip.is_reserved:
+                return False
+        except ValueError:
+            # Not an IP address, so it's a domain name
+            pass
+        
+        return True
+    except:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from a URL after validation"""
     url = flask.request.args.get("url")
+    
+    if not is_safe_url(url):
+        return "Invalid or unsafe URL", 400
+    
     response = requests.get(url, allow_redirects=True)
     return response.text
 
