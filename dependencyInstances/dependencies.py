@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -55,9 +57,9 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """No longer vulnerable to XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +67,51 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safe handling of URL fetching with proper validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url:
+        return "Missing URL parameter", 400
+    
+    try:
+        # 1. Validate URL scheme
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Unsupported URL scheme. Only HTTP and HTTPS are allowed", 400
+        
+        # 2. Extract hostname without auth info
+        netloc = parsed_url.netloc
+        if '@' in netloc:
+            netloc = netloc.split('@')[1]
+        
+        hostname = netloc.split(':')[0]  # Remove port if present
+        
+        # 3. Check for localhost variations
+        if hostname.lower() == 'localhost' or hostname == '127.0.0.1' or hostname == '::1':
+            return "Access to localhost not allowed", 403
+            
+        # 4. IP address check
+        try:
+            ip = ipaddress.ip_address(hostname)
+            # Block private, loopback, link-local, and other non-routable IPs
+            if not ip.is_global:
+                return "Access to non-public networks not allowed", 403
+        except ValueError:
+            # Hostname is not an IP - this is fine
+            pass
+        
+        # 5. Make the request with appropriate safeguards
+        response = requests.get(
+            url,
+            allow_redirects=True,
+            timeout=10,  # Prevent hanging connections
+        )
+        
+        return response.text
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
