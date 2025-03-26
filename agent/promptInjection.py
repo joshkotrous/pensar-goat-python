@@ -1,12 +1,19 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# More secure API key handling using environment variables
+# Retrieve the API key from environment variables
+# Set with: export OPENAI_API_KEY="your-api-key"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is not set. Please set it before running this script.")
 
 
 def ai_agent(user_input):
-    """A more secure AI agent protected against prompt injection."""
-    # Use OpenAI's message structure with separate roles instead of embedding everything in a single prompt
+    """A more secure AI agent that mitigates prompt injection risk."""
+    # Using separate message objects for system instructions and user input
+    # This is the recommended approach by OpenAI
     messages = [
         {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully."},
         {"role": "user", "content": user_input}
