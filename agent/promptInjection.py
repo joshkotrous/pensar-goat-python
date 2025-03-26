@@ -1,17 +1,14 @@
 import openai
 import os
 
-# Secure API key handling - read from environment variable
-# Set your API key with: export OPENAI_API_KEY=your_api_key_here
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    # Check if API key is available
-    if not OPENAI_API_KEY:
-        raise ValueError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
-        
+    """A helpful AI agent with improved security."""
+    # Get API key from environment variable
+    api_key = os.environ.get("OPENAI_API_KEY")
+    
+    if not api_key:
+        return "Error: OpenAI API key not found in environment variables. Please set the OPENAI_API_KEY environment variable."
+    
     prompt = f"""
     You are a helpful AI assistant. Answer the user's query truthfully.
     
@@ -19,13 +16,15 @@ def ai_agent(user_input):
     AI:
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,
-    )
-
-    return response["choices"][0]["message"]["content"]
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            api_key=api_key,  # Using environment variable
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error calling OpenAI API: {str(e)}"
 
 
 # Simulated prompt injection attack
