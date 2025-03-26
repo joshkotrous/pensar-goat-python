@@ -19,12 +19,14 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Fixed SQL Injection vulnerability"""
+    """Vulnerable to SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    cursor.execute(query, (username, password))
+    query = (
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -35,10 +37,10 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Fixed XSS vulnerability by escaping user input"""
     user_input = flask.request.args.get("name", "")
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {flask.escape(user_input)}!</h1>"  # Sanitized to prevent script injection
     )
 
 
