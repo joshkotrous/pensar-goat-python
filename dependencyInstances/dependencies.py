@@ -46,9 +46,9 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Previously vulnerable to Arbitrary Code Execution"""
+    """Load configuration from YAML file"""
     with open("config.yaml", "r") as file:
-        data = yaml.safe_load(file)  # Using safe_load instead of unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
