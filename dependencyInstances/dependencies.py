@@ -65,54 +65,33 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Protected against SSRF vulnerabilities"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    
-    # Validate URL to prevent SSRF
-    if not url:
-        return "URL parameter is required", 400
-    
-    try:
-        # Parse URL to check for internal or private addresses
-        parsed_url = requests.utils.urlparse(url)
-        hostname = parsed_url.netloc.split(':')[0].lower()
-        
-        # Block access to common internal hostnames and IP ranges
-        internal_patterns = [
-            'localhost', '127.0.0.1', '0.0.0.0', '::1',
-            '.local', '192.168.', '10.',
-            '172.16.', '172.17.', '172.18.', '172.19.',
-            '172.20.', '172.21.', '172.22.', '172.23.',
-            '172.24.', '172.25.', '172.26.', '172.27.',
-            '172.28.', '172.29.', '172.30.', '172.31.'
-        ]
-        
-        if any(hostname == pattern or hostname.startswith(pattern) for pattern in internal_patterns):
-            return "Access to internal resources is forbidden", 403
-        
-        # Make request with redirects disabled and timeout
-        response = requests.get(url, allow_redirects=False, timeout=5)
-        
-        # Check for redirects
-        if response.status_code in (301, 302, 303, 307, 308):
-            return "Redirects are not allowed", 403
-            
-        return response.text
-    
-    except Exception as e:
-        return f"Error processing request: {str(e)}", 500
+    response = requests.get(url, allow_redirects=True)
+    return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Securely connect to an SSH server with host key validation"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load system host keys
+    ssh.load_system_host_keys()
+    
+    # Use RejectPolicy instead of AutoAddPolicy to reject unknown host keys
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        # Connect with proper host key validation
+        ssh.connect("malicious-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.ssh_exception.SSHException as e:
+        # Handle host key validation errors
+        return f"SSH connection failed: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
