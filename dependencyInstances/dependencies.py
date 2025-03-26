@@ -4,9 +4,46 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse
+import ipaddress
+from urllib.parse import urlparse
+import socket
 
 app = flask.Flask(__name__)
+
+# SSRF Protection
+ALLOWED_SCHEMES = {'http', 'https'}
+BLOCKED_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0'}
+
+def is_private_ip(hostname):
+    """Check if hostname resolves to a private IP."""
+    try:
+        ip = socket.gethostbyname(hostname)
+        return ipaddress.ip_address(ip).is_private
+    except (socket.error, ValueError):
+        # If we can't resolve or parse the IP, consider it unsafe
+        return True
+
+def is_url_safe(url):
+    """Validate URL is not pointing to internal resources."""
+    try:
+        parsed = urlparse(url)
+        
+        # Check scheme
+        if parsed.scheme not in ALLOWED_SCHEMES:
+            return False
+            
+        # Check hostname
+        if parsed.netloc.lower() in BLOCKED_HOSTS:
+            return False
+            
+        # Check for private IP ranges
+        if is_private_ip(parsed.netloc):
+            return False
+            
+        return True
+    except Exception:
+        # If URL parsing fails, consider it unsafe
+        return False
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -66,31 +103,13 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Protected against open redirect vulnerabilities"""
+    """Fetch content from safe external URLs only."""
     url = flask.request.args.get("url")
     
-    # Validate input is a URL
-    if not url or not (url.startswith('http://') or url.startswith('https://')):
-        return "Invalid URL", 400
-    
-    # Make the initial request without following redirects
-    response = requests.get(url, allow_redirects=False)
-    
-    # Check if there's a redirect
-    if 300 <= response.status_code < 400 and 'Location' in response.headers:
-        redirect_url = response.headers['Location']
-        # Check if the redirect URL is a safe URL
-        parsed_original = urllib.parse.urlparse(url)
-        parsed_redirect = urllib.parse.urlparse(redirect_url)
+    if not url or not is_url_safe(url):
+        return "Invalid or disallowed URL", 400
         
-        # Only allow redirects to the same domain or to a relative path
-        if parsed_redirect.netloc and parsed_redirect.netloc != parsed_original.netloc:
-            return f"Redirect to untrusted domain not allowed: {parsed_redirect.netloc}", 403
-            
-        # If we get here, it's a safe redirect, so make the follow-up request
-        final_response = requests.get(redirect_url)
-        return final_response.text
-    
+    response = requests.get(url, allow_redirects=True)
     return response.text
 
 
