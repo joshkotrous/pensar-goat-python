@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from markupsafe import escape  # Already a dependency of Flask
 
 app = flask.Flask(__name__)
 
@@ -19,12 +20,14 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Fixed SQL Injection vulnerability"""
+    """Vulnerable to SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    cursor.execute(query, (username, password))
+    query = (
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -35,11 +38,9 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Fixed XSS vulnerability"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    return f"<h1>Welcome, {escape(user_input)}!</h1>"  # Sanitize user input
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
