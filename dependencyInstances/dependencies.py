@@ -4,8 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-from urllib.parse import urlparse
-import ipaddress
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -65,50 +64,29 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
-def is_safe_url(url):
-    """Validates if a URL is safe to request."""
-    if not url:
-        return False
-    
-    # Basic URL validation using urllib.parse
-    try:
-        parsed_url = urlparse(url)
-        
-        # Check scheme (protocol)
-        if parsed_url.scheme not in ['http', 'https']:
-            return False
-        
-        # Check if URL is for an internal resource
-        netloc = parsed_url.netloc.lower()
-        hostname = netloc.split(':')[0]  # Remove port if present
-        
-        # Block localhost and common internal domains
-        if not hostname or hostname in ['localhost', '127.0.0.1', '::1'] or hostname.endswith('.internal'):
-            return False
-            
-        # For IP addresses, check if they're private
-        try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_multicast or ip.is_reserved:
-                return False
-        except ValueError:
-            # Not an IP address, so it's a domain name
-            pass
-        
-        return True
-    except:
-        return False
-
 @app.route("/fetch")
 def fetch():
-    """Fetches content from a URL after validation"""
+    """Protected against SSRF by validating URL schemes and hosts"""
     url = flask.request.args.get("url")
+    if not url:
+        return "No URL provided", 400
     
-    if not is_safe_url(url):
-        return "Invalid or unsafe URL", 400
+    # Define allowed schemes and hosts
+    ALLOWED_SCHEMES = {'http', 'https'}
+    ALLOWED_HOSTS = {'example.com', 'api.example.com', 'public-api.example.org'}
     
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        if parsed_url.scheme not in ALLOWED_SCHEMES:
+            return f"Scheme '{parsed_url.scheme}' not allowed", 403
+        if parsed_url.netloc not in ALLOWED_HOSTS:
+            return f"Host '{parsed_url.netloc}' not allowed", 403
+        
+        # URL is valid, proceed with the request
+        response = requests.get(url, allow_redirects=True)
+        return response.text
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
