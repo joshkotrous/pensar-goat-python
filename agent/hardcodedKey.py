@@ -1,37 +1,38 @@
 import openai
 import os
 
-# Get API key from environment variable
+# Use environment variables for API keys instead of hardcoding
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 
 def ai_agent(user_input):
-    """An AI agent that securely handles API keys."""
-    # Check if API key is available
+    """A secured AI agent resistant to prompt injection."""
     if not OPENAI_API_KEY:
-        return "Error: OpenAI API key not found. Please set the OPENAI_API_KEY environment variable."
+        return "Error: OpenAI API key not found in environment variables."
     
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
-    
-    User: {user_input}
-    AI:
-    """
-
     try:
+        # Use the OpenAI recommended approach with separate messages
+        # This helps prevent prompt injection by clearly defining roles
         response = openai.ChatCompletion.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            api_key=OPENAI_API_KEY,  # Now using environment variable
+            messages=[
+                {"role": "system", "content": "You are an AI assistant. Answer the following user query."},
+                {"role": "user", "content": user_input}
+            ],
+            api_key=OPENAI_API_KEY,
         )
         return response["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Error calling the OpenAI API: {str(e)}"
+    except Exception:
+        return "An error occurred while processing your request."
 
 
 # Example usage
 while True:
-    user_query = input("Ask the AI: ")
-    if user_query.lower() in ["exit", "quit"]:
+    try:
+        user_query = input("Ask the AI: ")
+        if user_query.lower() in ["exit", "quit"]:
+            break
+        print(ai_agent(user_query))
+    except KeyboardInterrupt:
+        print("\nExiting...")
         break
-    print(ai_agent(user_query))
