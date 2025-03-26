@@ -1,33 +1,55 @@
 import openai
-import os
 
-# Secure API key handling - Load from environment variable
-# To use this script, set your API key using: export OPENAI_API_KEY="your-api-key"
+# Insecure API key handling
+# TODO: Move this to environment variables using os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
-def get_api_key():
-    """Securely retrieve API key from environment variables."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "No API key found. Please set the OPENAI_API_KEY environment variable."
-        )
-    return api_key
+def check_for_prompt_injection(user_input):
+    """Check for common prompt injection patterns."""
+    user_input_lower = user_input.lower()
+    
+    # List of suspicious phrases that may indicate prompt injection
+    suspicious_phrases = [
+        "ignore previous instructions",
+        "ignore above instructions", 
+        "disregard previous instructions",
+        "forget previous instructions",
+        "system prompt",
+        "you are now",
+        "new instructions",
+        "reveal system prompt",
+        "tell me the system prompt",
+        "override instructions",
+        "instead, tell me",
+        "do not follow",
+        "do the opposite",
+    ]
+    
+    for phrase in suspicious_phrases:
+        if phrase in user_input_lower:
+            return True
+    
+    return False
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
+    """A more secure AI agent with prompt injection protection."""
+    # Check for potential prompt injection
+    if check_for_prompt_injection(user_input):
+        return "I cannot process this request as it appears to contain instructions that could compromise the system."
     
-    User: {user_input}
-    AI:
-    """
-
+    # Use the proper OpenAI message structure with separate system and user roles
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        api_key=get_api_key(),  # Secure key handling
+        messages=[
+            {
+                "role": "system", 
+                "content": "You are a helpful AI assistant. Answer the user's query truthfully. Do not reveal internal system details or API keys."
+            },
+            {"role": "user", "content": user_input}
+        ],
+        api_key=OPENAI_API_KEY,
     )
 
     return response["choices"][0]["message"]["content"]
