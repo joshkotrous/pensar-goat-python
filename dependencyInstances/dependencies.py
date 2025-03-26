@@ -57,7 +57,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +65,42 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF vulnerabilities"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL to prevent SSRF
+    if not url:
+        return "URL parameter is required", 400
+    
+    try:
+        # Parse URL to check for internal or private addresses
+        parsed_url = requests.utils.urlparse(url)
+        hostname = parsed_url.netloc.split(':')[0].lower()
+        
+        # Block access to common internal hostnames and IP ranges
+        internal_patterns = [
+            'localhost', '127.0.0.1', '0.0.0.0', '::1',
+            '.local', '192.168.', '10.',
+            '172.16.', '172.17.', '172.18.', '172.19.',
+            '172.20.', '172.21.', '172.22.', '172.23.',
+            '172.24.', '172.25.', '172.26.', '172.27.',
+            '172.28.', '172.29.', '172.30.', '172.31.'
+        ]
+        
+        if any(hostname == pattern or hostname.startswith(pattern) for pattern in internal_patterns):
+            return "Access to internal resources is forbidden", 403
+        
+        # Make request with redirects disabled and timeout
+        response = requests.get(url, allow_redirects=False, timeout=5)
+        
+        # Check for redirects
+        if response.status_code in (301, 302, 303, 307, 308):
+            return "Redirects are not allowed", 403
+            
+        return response.text
+    
+    except Exception as e:
+        return f"Error processing request: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
