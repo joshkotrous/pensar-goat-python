@@ -4,7 +4,6 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -66,39 +65,29 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Protected against SSRF by validating URL schemes and hosts"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    if not url:
-        return "No URL provided", 400
-    
-    # Define allowed schemes and hosts
-    ALLOWED_SCHEMES = {'http', 'https'}
-    ALLOWED_HOSTS = {'example.com', 'api.example.com', 'public-api.example.org'}
-    
-    try:
-        parsed_url = urllib.parse.urlparse(url)
-        if parsed_url.scheme not in ALLOWED_SCHEMES:
-            return f"Scheme '{parsed_url.scheme}' not allowed", 403
-        if parsed_url.netloc not in ALLOWED_HOSTS:
-            return f"Host '{parsed_url.netloc}' not allowed", 403
-        
-        # URL is valid, proceed with the request
-        response = requests.get(url, allow_redirects=True)
-        return response.text
-    except Exception as e:
-        return f"Error processing URL: {str(e)}", 400
+    response = requests.get(url, allow_redirects=True)
+    return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Secure SSH command execution with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    # Load known hosts from the system's known_hosts file
+    ssh.load_system_host_keys()
+    
+    try:
+        # Connect with proper host verification (RejectPolicy is the default)
+        ssh.connect("trusted-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.SSHException as e:
+        # Handle SSH exceptions properly
+        return f"SSH connection error: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
