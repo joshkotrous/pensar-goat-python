@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL validation
 
 app = flask.Flask(__name__)
 
@@ -63,52 +64,34 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+def is_valid_url(url):
+    """Validate URL against an allowlist of schemes and domains"""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # Define allowed domains and schemes
+        allowed_domains = ['example.com', 'api.example.com', 'trusted-domain.org']
+        allowed_schemes = ['http', 'https']
+        
+        # Check if scheme and domain are allowed
+        return (parsed.scheme in allowed_schemes and 
+                any(parsed.netloc == domain or parsed.netloc.endswith('.' + domain) 
+                    for domain in allowed_domains))
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Fetches content from a URL with validation to prevent security issues"""
+    """Protected against SSRF by validating URLs"""
     url = flask.request.args.get("url")
     
-    # Validate URL is provided
-    if not url:
-        return "No URL provided", 400
-    
+    if not url or not is_valid_url(url):
+        return "Invalid or unauthorized URL", 403
+        
     try:
-        from urllib.parse import urlparse
-        parsed_url = urlparse(url)
-        
-        # Validate URL has proper structure
-        if not parsed_url.scheme or not parsed_url.netloc:
-            return "Invalid URL format", 400
-        
-        # Validate protocol (only allow http/https)
-        if parsed_url.scheme not in ['http', 'https']:
-            return "Only HTTP and HTTPS URLs are allowed", 403
-        
-        # Prevent access to internal networks/localhost
-        hostname = parsed_url.netloc.split(':')[0].lower()
-        if hostname == 'localhost' or hostname.startswith('127.'):
-            return "Access to internal networks is not allowed", 403
-            
-        # Check for other private IP ranges
-        if hostname.startswith('10.') or hostname.startswith('192.168.'):
-            return "Access to internal networks is not allowed", 403
-            
-        # Check for 172.16.0.0 to 172.31.255.255 range
-        if hostname.startswith('172.'):
-            try:
-                parts = hostname.split('.')
-                if len(parts) > 1 and 16 <= int(parts[1]) <= 31:
-                    return "Access to internal networks is not allowed", 403
-            except (ValueError, IndexError):
-                # Not a valid IP in this format, continue
-                pass
-        
-        # Make the request with safety measures
         response = requests.get(url, allow_redirects=True, timeout=10)
         return response.text
-    
-    except Exception as e:
-        return f"Error processing URL: {str(e)}", 500
+    except requests.exceptions.RequestException:
+        return "Error fetching URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
