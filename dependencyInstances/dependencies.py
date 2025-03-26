@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
 
 app = flask.Flask(__name__)
 
@@ -55,9 +56,9 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Protected against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,9 +66,31 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against open redirect vulnerabilities"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate input is a URL
+    if not url or not (url.startswith('http://') or url.startswith('https://')):
+        return "Invalid URL", 400
+    
+    # Make the initial request without following redirects
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check if there's a redirect
+    if 300 <= response.status_code < 400 and 'Location' in response.headers:
+        redirect_url = response.headers['Location']
+        # Check if the redirect URL is a safe URL
+        parsed_original = urllib.parse.urlparse(url)
+        parsed_redirect = urllib.parse.urlparse(redirect_url)
+        
+        # Only allow redirects to the same domain or to a relative path
+        if parsed_redirect.netloc and parsed_redirect.netloc != parsed_original.netloc:
+            return f"Redirect to untrusted domain not allowed: {parsed_redirect.netloc}", 403
+            
+        # If we get here, it's a safe redirect, so make the follow-up request
+        final_response = requests.get(redirect_url)
+        return final_response.text
+    
     return response.text
 
 
