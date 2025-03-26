@@ -72,46 +72,19 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command(host, username, password, command="ls", known_hosts_file=None):
-    """
-    Execute a command on a remote server via SSH with proper host key verification.
-    
-    Args:
-        host (str): The SSH server hostname or IP address
-        username (str): SSH username
-        password (str): SSH password
-        command (str): Command to execute on the server
-        known_hosts_file (str, optional): Path to known_hosts file for verification
-        
-    Returns:
-        bytes: Output of the command
-        
-    Raises:
-        paramiko.SSHException: If connection or authentication fails
-        paramiko.BadHostKeyException: If host key verification fails
-        ValueError: If required parameters are missing
-    """
-    if not host or not username or not password:
-        raise ValueError("SSH host, username, and password are required")
-    
+def run_ssh_command():
+    """Vulnerable to RCE if connecting to an untrusted SSH server"""
     ssh = paramiko.SSHClient()
-    
-    # Load host keys for verification
-    if known_hosts_file:
-        ssh.load_host_keys(known_hosts_file)
-    else:
-        ssh.load_system_host_keys()
-    
-    # Reject unknown host keys instead of auto-accepting
-    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
-    
-    try:
-        ssh.connect(host, username=username, password=password)
-        stdin, stdout, stderr = ssh.exec_command(command)
-        return stdout.read()
-    finally:
-        ssh.close()
+    ssh.set_missing_host_key_policy(
+        paramiko.AutoAddPolicy()
+    )  # Automatically accepting any key
+    ssh.connect("malicious-server.com", username="user", password="pass")
+    stdin, stdout, stderr = ssh.exec_command("ls")
+    return stdout.read()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use environment variable to control debug mode
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode)
