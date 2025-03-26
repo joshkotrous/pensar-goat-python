@@ -55,9 +55,9 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Protected against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +65,50 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from a URL with validation to prevent security issues"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL is provided
+    if not url:
+        return "No URL provided", 400
+    
+    try:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        
+        # Validate URL has proper structure
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return "Invalid URL format", 400
+        
+        # Validate protocol (only allow http/https)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Only HTTP and HTTPS URLs are allowed", 403
+        
+        # Prevent access to internal networks/localhost
+        hostname = parsed_url.netloc.split(':')[0].lower()
+        if hostname == 'localhost' or hostname.startswith('127.'):
+            return "Access to internal networks is not allowed", 403
+            
+        # Check for other private IP ranges
+        if hostname.startswith('10.') or hostname.startswith('192.168.'):
+            return "Access to internal networks is not allowed", 403
+            
+        # Check for 172.16.0.0 to 172.31.255.255 range
+        if hostname.startswith('172.'):
+            try:
+                parts = hostname.split('.')
+                if len(parts) > 1 and 16 <= int(parts[1]) <= 31:
+                    return "Access to internal networks is not allowed", 403
+            except (ValueError, IndexError):
+                # Not a valid IP in this format, continue
+                pass
+        
+        # Make the request with safety measures
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
