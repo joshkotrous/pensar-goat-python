@@ -4,8 +4,6 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import ipaddress
-from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -67,63 +65,52 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Safe handling of URL fetching with proper validation"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    
-    # Validate URL
-    if not url:
-        return "Missing URL parameter", 400
-    
-    try:
-        # 1. Validate URL scheme
-        parsed_url = urlparse(url)
-        if parsed_url.scheme not in ['http', 'https']:
-            return "Unsupported URL scheme. Only HTTP and HTTPS are allowed", 400
-        
-        # 2. Extract hostname without auth info
-        netloc = parsed_url.netloc
-        if '@' in netloc:
-            netloc = netloc.split('@')[1]
-        
-        hostname = netloc.split(':')[0]  # Remove port if present
-        
-        # 3. Check for localhost variations
-        if hostname.lower() == 'localhost' or hostname == '127.0.0.1' or hostname == '::1':
-            return "Access to localhost not allowed", 403
-            
-        # 4. IP address check
-        try:
-            ip = ipaddress.ip_address(hostname)
-            # Block private, loopback, link-local, and other non-routable IPs
-            if not ip.is_global:
-                return "Access to non-public networks not allowed", 403
-        except ValueError:
-            # Hostname is not an IP - this is fine
-            pass
-        
-        # 5. Make the request with appropriate safeguards
-        response = requests.get(
-            url,
-            allow_redirects=True,
-            timeout=10,  # Prevent hanging connections
-        )
-        
-        return response.text
-        
-    except Exception as e:
-        return f"Error processing URL: {str(e)}", 400
+    response = requests.get(url, allow_redirects=True)
+    return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(host, username, password, command="ls", known_hosts_file=None):
+    """
+    Execute a command on a remote server via SSH with proper host key verification.
+    
+    Args:
+        host (str): The SSH server hostname or IP address
+        username (str): SSH username
+        password (str): SSH password
+        command (str): Command to execute on the server
+        known_hosts_file (str, optional): Path to known_hosts file for verification
+        
+    Returns:
+        bytes: Output of the command
+        
+    Raises:
+        paramiko.SSHException: If connection or authentication fails
+        paramiko.BadHostKeyException: If host key verification fails
+        ValueError: If required parameters are missing
+    """
+    if not host or not username or not password:
+        raise ValueError("SSH host, username, and password are required")
+    
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load host keys for verification
+    if known_hosts_file:
+        ssh.load_host_keys(known_hosts_file)
+    else:
+        ssh.load_system_host_keys()
+    
+    # Reject unknown host keys instead of auto-accepting
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect(host, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
