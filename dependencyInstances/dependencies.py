@@ -4,7 +4,6 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse  # Added for URL validation
 
 app = flask.Flask(__name__)
 
@@ -64,46 +63,33 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
-def is_valid_url(url):
-    """Validate URL against an allowlist of schemes and domains"""
-    try:
-        parsed = urllib.parse.urlparse(url)
-        # Define allowed domains and schemes
-        allowed_domains = ['example.com', 'api.example.com', 'trusted-domain.org']
-        allowed_schemes = ['http', 'https']
-        
-        # Check if scheme and domain are allowed
-        return (parsed.scheme in allowed_schemes and 
-                any(parsed.netloc == domain or parsed.netloc.endswith('.' + domain) 
-                    for domain in allowed_domains))
-    except Exception:
-        return False
-
 @app.route("/fetch")
 def fetch():
-    """Protected against SSRF by validating URLs"""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    
-    if not url or not is_valid_url(url):
-        return "Invalid or unauthorized URL", 403
-        
-    try:
-        response = requests.get(url, allow_redirects=True, timeout=10)
-        return response.text
-    except requests.exceptions.RequestException:
-        return "Error fetching URL", 500
+    response = requests.get(url, allow_redirects=True)
+    return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Execute a command on an SSH server with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
+    
+    # Load system host keys
+    ssh.load_system_host_keys()
+    
+    # Use strict host key checking (like OpenSSH)
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    # Connect with proper validation
+    # NOTE: This will fail if the host key isn't in known_hosts
     ssh.connect("malicious-server.com", username="user", password="pass")
+    
     stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    result = stdout.read()
+    ssh.close()
+    return result
 
 
 if __name__ == "__main__":
