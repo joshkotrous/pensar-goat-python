@@ -5,24 +5,29 @@ OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
-    
-    User: {user_input}
-    AI:
-    """
+    """A secure AI agent with protection against prompt injection."""
+    # Use the messages array properly with separate system and user messages
+    messages = [
+        {
+            "role": "system", 
+            "content": "You are an AI assistant. Answer the following user query."
+        },
+        {
+            "role": "user", 
+            "content": user_input
+        }
+    ]
 
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         api_key=OPENAI_API_KEY,  # Insecure key handling
     )
 
     return response["choices"][0]["message"]["content"]
 
 
-# Example vulnerable usage
+# Example usage
 while True:
     user_query = input("Ask the AI: ")
     if user_query.lower() in ["exit", "quit"]:
