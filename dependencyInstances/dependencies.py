@@ -46,9 +46,9 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Config loader with safe YAML deserialization"""
+    """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.safe_load(file)  # Using safe yaml.safe_load() instead
+        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
     return data
 
 
@@ -63,11 +63,33 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+def is_safe_url(url):
+    """Check if the URL is safe to fetch."""
+    if not url:
+        return False
+    # Add your whitelist of allowed domains or URLs here
+    allowed_domains = ['example.com', 'trusted-domain.com']
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        return parsed.netloc in allowed_domains and parsed.scheme in ['http', 'https']
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from a URL safely."""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    if not is_safe_url(url):
+        return "Invalid or untrusted URL", 400
+    
+    # Disallow redirects for security
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check if there's a redirect (status code 3xx)
+    if 300 <= response.status_code < 400:
+        return "Redirects are not allowed for security reasons", 403
+    
     return response.text
 
 
