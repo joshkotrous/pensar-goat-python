@@ -1,11 +1,17 @@
 import openai
+import os
 
-# Insecure API key handling (should use environment variables or a secure vault)
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Secure API key handling using environment variables
+# Set your OPENAI_API_KEY as an environment variable before running this script
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
+    """An AI agent that securely handles API keys."""
+    # Check if the API key is set in the environment
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return "Error: OPENAI_API_KEY environment variable not set."
+    
     prompt = f"""
     You are an AI assistant. Answer the following user query:
     
@@ -16,13 +22,13 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        api_key=api_key,  # Using environment variable
     )
 
     return response["choices"][0]["message"]["content"]
 
 
-# Example vulnerable usage
+# Example usage
 while True:
     user_query = input("Ask the AI: ")
     if user_query.lower() in ["exit", "quit"]:
