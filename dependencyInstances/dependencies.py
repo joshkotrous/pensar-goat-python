@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -63,34 +64,38 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
-def is_safe_url(url):
-    """Check if the URL is safe to fetch."""
-    if not url:
-        return False
-    # Add your whitelist of allowed domains or URLs here
-    allowed_domains = ['example.com', 'trusted-domain.com']
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        return parsed.netloc in allowed_domains and parsed.scheme in ['http', 'https']
-    except Exception:
-        return False
-
 @app.route("/fetch")
 def fetch():
-    """Fetches content from a URL safely."""
+    """Protected against SSRF by validating URL scheme and host"""
     url = flask.request.args.get("url")
-    if not is_safe_url(url):
-        return "Invalid or untrusted URL", 400
+    if not url:
+        return "Error: No URL provided", 400
     
-    # Disallow redirects for security
-    response = requests.get(url, allow_redirects=False)
-    
-    # Check if there's a redirect (status code 3xx)
-    if 300 <= response.status_code < 400:
-        return "Redirects are not allowed for security reasons", 403
-    
-    return response.text
+    # Parse the URL to extract scheme and hostname
+    try:
+        parsed_url = urlparse(url)
+        scheme = parsed_url.scheme
+        hostname = parsed_url.netloc
+        
+        # Define allowlists
+        allowed_schemes = ["http", "https"]
+        allowed_domains = ["trusted-domain.com", "api.example.org", "data.example.com"]
+        
+        # Validate scheme and hostname
+        if scheme not in allowed_schemes:
+            return f"Error: Scheme '{scheme}' not allowed", 403
+        
+        if not any(hostname == domain or hostname.endswith('.' + domain) for domain in allowed_domains):
+            return f"Error: Domain '{hostname}' not allowed", 403
+        
+        # Now it's safe to make the request
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        
+        # Return the response text
+        return response.text
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
