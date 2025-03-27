@@ -55,19 +55,41 @@ def load_config():
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Secure against XXE"""
+    """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
+    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
 
 # ======== 5. Insecure Request Handling ========
+def is_safe_url(url):
+    """Check if the URL is safe to fetch."""
+    if not url:
+        return False
+    # Add your whitelist of allowed domains or URLs here
+    allowed_domains = ['example.com', 'trusted-domain.com']
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        return parsed.netloc in allowed_domains and parsed.scheme in ['http', 'https']
+    except Exception:
+        return False
+
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from a URL safely."""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    if not is_safe_url(url):
+        return "Invalid or untrusted URL", 400
+    
+    # Disallow redirects for security
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check if there's a redirect (status code 3xx)
+    if 300 <= response.status_code < 400:
+        return "Redirects are not allowed for security reasons", 403
+    
     return response.text
 
 
