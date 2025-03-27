@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os  # Added for environment variable access
 
 app = flask.Flask(__name__)
 
@@ -73,25 +74,16 @@ def fetch():
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Connect to SSH server with proper host key validation"""
+    """Vulnerable to RCE if connecting to an untrusted SSH server"""
     ssh = paramiko.SSHClient()
-    
-    # Load system host keys
-    ssh.load_system_host_keys()
-    
-    # Set policy to reject unknown server keys
-    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
-    
-    try:
-        ssh.connect("malicious-server.com", username="user", password="pass")
-        stdin, stdout, stderr = ssh.exec_command("ls")
-        return stdout.read()
-    except paramiko.SSHException as e:
-        # Handle unknown host key
-        return f"SSH connection failed: {str(e)}"
-    finally:
-        ssh.close()
+    ssh.set_missing_host_key_policy(
+        paramiko.AutoAddPolicy()
+    )  # Automatically accepting any key
+    ssh.connect("malicious-server.com", username="user", password="pass")
+    stdin, stdout, stderr = ssh.exec_command("ls")
+    return stdout.read()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
+    app.run(debug=debug_mode)
