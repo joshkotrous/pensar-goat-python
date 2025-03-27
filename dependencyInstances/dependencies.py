@@ -63,46 +63,34 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
-def is_safe_url(url):
-    """Check if the URL is safe to fetch."""
-    if not url:
-        return False
-    # Add your whitelist of allowed domains or URLs here
-    allowed_domains = ['example.com', 'trusted-domain.com']
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        return parsed.netloc in allowed_domains and parsed.scheme in ['http', 'https']
-    except Exception:
-        return False
-
 @app.route("/fetch")
 def fetch():
-    """Fetches content from a URL safely."""
+    """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    if not is_safe_url(url):
-        return "Invalid or untrusted URL", 400
-    
-    # Disallow redirects for security
-    response = requests.get(url, allow_redirects=False)
-    
-    # Check if there's a redirect (status code 3xx)
-    if 300 <= response.status_code < 400:
-        return "Redirects are not allowed for security reasons", 403
-    
+    response = requests.get(url, allow_redirects=True)
     return response.text
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Connect to SSH server with proper host key validation"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load system host keys
+    ssh.load_system_host_keys()
+    
+    # Set policy to reject unknown server keys
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect("malicious-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.SSHException as e:
+        # Handle unknown host key
+        return f"SSH connection failed: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
