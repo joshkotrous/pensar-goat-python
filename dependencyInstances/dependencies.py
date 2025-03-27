@@ -57,7 +57,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # Updated for compatibility with 4.6.5
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
