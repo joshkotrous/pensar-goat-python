@@ -57,7 +57,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # Updated for compatibility with 4.6.5
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -67,9 +67,7 @@ def upload_xml():
 def fetch():
     """Vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
-    session = requests.Session()
-    response = session.get(url, allow_redirects=True)
-    session.close()
+    response = requests.get(url, allow_redirects=True)
     return response.text
 
 
