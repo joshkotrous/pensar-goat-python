@@ -1,4 +1,5 @@
 from flask import Flask, request
+import os
 
 app = Flask(__name__)
 
@@ -13,4 +14,6 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use FLASK_DEBUG environment variable with a secure default (False)
+    debug_mode = os.environ.get("FLASK_DEBUG", "").lower() == "true"
+    app.run(debug=debug_mode)
