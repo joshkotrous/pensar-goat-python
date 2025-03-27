@@ -18,13 +18,11 @@ conn.commit()
 
 
 def login(username, password):
-    """Vulnerable authentication system using raw SQL queries."""
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
-
-    cursor.execute(query)
+    """Secure authentication system using parameterized queries."""
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    
+    # Use parameterized query instead of string interpolation
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,5 +35,7 @@ def login(username, password):
 malicious_username = "admin' --"
 malicious_password = "anything"
 
+# Attempt login with SQL injection
+login(malicious_username, malicious_password)
 # Attempt login with SQL injection
 login(malicious_username, malicious_password)
