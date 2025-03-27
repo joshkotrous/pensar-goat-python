@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import ipaddress
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -65,10 +67,47 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF by validating URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL is provided
+    if not url:
+        return "URL parameter is required", 400
+    
+    try:
+        # Parse the URL to extract hostname
+        parsed_url = urlparse(url)
+        
+        # Validate the URL has a valid scheme
+        if parsed_url.scheme not in ["http", "https"]:
+            return "Invalid URL scheme. Only HTTP and HTTPS are allowed.", 400
+        
+        hostname = parsed_url.netloc.split(":")[0]  # Remove port if present
+        
+        # Check for localhost and other common internal names
+        if hostname.lower() in ["localhost", "127.0.0.1", "::1", "0.0.0.0"]:
+            return "Access to internal resources is not allowed.", 403
+        
+        # Check if hostname is an IP address and if it's in a private range
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+                return "Access to private IP addresses is not allowed.", 403
+        except ValueError:
+            # Not an IP address, which is fine
+            pass
+        
+        # Whitelist approach (can be made configurable)
+        # allowed_domains = ["trusted-domain.com", "api.trusted-service.com"]
+        # if not any(hostname == domain or hostname.endswith(f".{domain}") for domain in allowed_domains):
+        #     return "Domain not in whitelist", 403
+            
+        # If all checks pass, make the request
+        response = requests.get(url, allow_redirects=True)
+        return response.text
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
