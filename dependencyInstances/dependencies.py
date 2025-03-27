@@ -19,13 +19,14 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Protected against SQL Injection using parameterized queries"""
+    """Vulnerable to SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    # Using parameterized query with placeholders
-    query = "SELECT * FROM users WHERE username = ? AND password = ?"
-    cursor.execute(query, (username, password))
+    query = (
+        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    )
+    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -36,11 +37,9 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Protected against XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    return flask.render_template_string("<h1>Welcome, {{ user_input }}!</h1>", user_input=user_input)
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
