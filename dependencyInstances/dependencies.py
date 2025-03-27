@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import re
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -62,11 +64,66 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Helper function to validate URLs
+def is_safe_url(url):
+    """
+    Validate if a URL is safe to request.
+    
+    Checks:
+    1. URL format is valid
+    2. URL doesn't point to internal network resources
+    3. URL uses an allowed scheme (http, https)
+    
+    Returns:
+        bool: True if the URL is safe, False otherwise
+    """
+    if not url:
+        return False
+    
+    # Check URL format
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+    except:
+        return False
+    
+    # Check URL scheme
+    if parsed.scheme not in ['http', 'https']:
+        return False
+    
+    # Check for internal network resources
+    hostname = parsed.netloc.split(':')[0]  # Remove port if present
+    
+    # Check for localhost variations
+    if hostname == 'localhost' or hostname == '127.0.0.1' or hostname.startswith('::1'):
+        return False
+    
+    # Check for private IP ranges
+    private_ip_patterns = [
+        r'^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$',  # 10.0.0.0/8
+        r'^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$',  # 172.16.0.0/12
+        r'^192\.168\.\d{1,3}\.\d{1,3}$',  # 192.168.0.0/16
+        r'^169\.254\.\d{1,3}\.\d{1,3}$',  # 169.254.0.0/16 (link-local)
+    ]
+    
+    for pattern in private_ip_patterns:
+        if re.match(pattern, hostname):
+            return False
+    
+    return True
+
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Previously vulnerable to credential leakage in redirects"""
     url = flask.request.args.get("url")
+    
+    # Validate the URL before making the request
+    if not url or not is_safe_url(url):
+        return "Error: Invalid or unsafe URL provided", 400
+    
     response = requests.get(url, allow_redirects=True)
     return response.text
 
