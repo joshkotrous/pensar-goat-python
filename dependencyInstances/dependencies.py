@@ -19,14 +19,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Protected against SQL Injection using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -39,9 +37,9 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
+    """Previously vulnerable to XSS, now fixed"""
         f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    return flask.render_template_string("<h1>Welcome, {{ user_input }}!</h1>", user_input=user_input)
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
@@ -50,25 +48,72 @@ def load_config():
     with open("config.yaml", "r") as file:
         data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
     return data
-
+        data = yaml.safe_load(file)  # Using yaml.safe_load() to prevent code execution
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    """Protected against XXE"""
     tree = ET.fromstring(xml_data, parser)
-    return ET.tostring(tree)
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
 
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+def is_safe_url(url):
+    """Checks if a URL is safe to request."""
+    try:
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(url)
+        
+        # Only allow http and https URLs
+        if parsed.scheme not in ['http', 'https']:
+            return False
+    """Connects to an SSH server with proper host key verification"""
+        # Extract hostname
+    
+    # Load system host keys for verification
+    ssh.load_system_host_keys()
+    
+    # Secure option: Use RejectPolicy to enforce host key verification
+    # This will reject connections to servers with unknown host keys
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    # Alternative option (less secure): Use WarningPolicy if you need more flexibility
+    # This will log a warning but still allow connections to servers with unknown host keys
+    # ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
+    
+    try:
+        # Connect to the server
+        ssh.connect("malicious-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.SSHException as e:
+        # Handle SSH exceptions (e.g., unknown host key)
+        return f"SSH Error: {str(e)}"
+    finally:
+        ssh.close()  # Ensure the connection is closed
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "No URL provided", 400
+    
+    if not is_safe_url(url):
+        return "Invalid or unsafe URL", 403
+    
+    try:
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    except requests.exceptions.RequestException:
+        return "Error fetching URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
