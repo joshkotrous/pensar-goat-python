@@ -6,6 +6,7 @@ import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
 
 app = flask.Flask(__name__)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True  # Explicit setting for compatibility
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
