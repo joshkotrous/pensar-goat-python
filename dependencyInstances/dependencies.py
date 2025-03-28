@@ -65,9 +65,20 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Handles fetching external URLs safely"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Basic URL validation
+    if not url or not (url.startswith('http://') or url.startswith('https://')):
+        return "Invalid URL", 400
+    
+    # Disable automatic redirects
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check if it's a redirect
+    if response.status_code in (301, 302, 303, 307, 308):
+        return f"Redirect to {response.headers.get('Location')} not followed", 200
+    
     return response.text
 
 
