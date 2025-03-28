@@ -4,8 +4,22 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # For URL parsing and validation
 
 app = flask.Flask(__name__)
+
+# Define allowed schemes and hosts for URL validation
+ALLOWED_SCHEMES = {'http', 'https'}
+ALLOWED_HOSTS = {'api.example.com', 'data.example.org'}  # Replace with actual allowed hosts
+
+def is_url_allowed(url):
+    """Validate URL against allowlist of schemes and hosts"""
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        return (parsed_url.scheme in ALLOWED_SCHEMES and 
+                parsed_url.netloc in ALLOWED_HOSTS)
+    except Exception:
+        return False
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -65,10 +79,26 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL against allowlist
+    if not url or not is_url_allowed(url):
+        return "Invalid or disallowed URL", 400
+    
+    try:
+        # Add timeout to prevent hanging
+        response = requests.get(
+            url,
+            allow_redirects=False,  # Prevent redirects to malicious URLs
+            timeout=10,
+            headers={'User-Agent': 'SecureApp/1.0'}  # Don't leak default user agent
+        )
+        
+        # Return a limited subset of the response data
+        return f"Request completed with status code: {response.status_code}"
+    except requests.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
