@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import yaml  # Vulnerable to arbitrary code execution
 import flask  # Vulnerable Flask version
@@ -84,4 +85,6 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use environment variable to control debug mode, defaulting to False for security
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode)
