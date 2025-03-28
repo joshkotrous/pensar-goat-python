@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # For URL validation
 
 app = flask.Flask(__name__)
 
@@ -32,7 +33,7 @@ def login():
     if user:
         return f"Welcome {user[1]}!"
     return "Invalid credentials."
-
+# ======== 2. XSS Vulnerability ========
 
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
@@ -42,7 +43,7 @@ def home():
     return (
         f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
     )
-
+def load_config():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
@@ -50,7 +51,7 @@ def load_config():
     with open("config.yaml", "r") as file:
         data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
     return data
-
+@app.route("/upload_xml", methods=["POST"])
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
@@ -60,27 +61,50 @@ def upload_xml():
     parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
-
+@app.route("/fetch")
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safely handles external requests"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
-
-
-# ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Validate URL to prevent SSRF or Open Redirect
+    if not url:
+        return "No URL provided", 400
+def run_ssh_command(server="trusted-server.com", username="user", command="ls", key_path=None, password="pass"):
+    """Secure connection to a trusted SSH server"""
+    allowed_domains = ["trusted-domain.com", "api.trusted-service.org"]
+    
+    # Load host keys from the user's known_hosts file
+    ssh.load_system_host_keys()
+    
+    # Set a strict host key policy
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        # Connect to the server with key-based auth if key_path is provided, else with password
+        if key_path:
+            ssh.connect(server, username=username, key_filename=key_path)
+        elif password:
+            ssh.connect(server, username=username, password=password)
+        else:
+            raise ValueError("Either key_path or password must be provided")
+        
+        # Execute the command
+        stdin, stdout, stderr = ssh.exec_command(command)
+        result = stdout.read()
+        
+        # Close the connection
+        ssh.close()
+        
+        return result
+    except paramiko.SSHException as e:
+        # Handle SSH exceptions
+        return f"SSH Error: {str(e)}"
+    except Exception as e:
+        # Handle other exceptions
+        return f"Error: {str(e)}"
 
 
 if __name__ == "__main__":
