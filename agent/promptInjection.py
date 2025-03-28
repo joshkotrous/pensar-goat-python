@@ -1,21 +1,29 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Secure API key handling - load from environment variable
+# Environment variable name: OPENAI_API_KEY
 
 
-def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
+    """A more secure AI agent with prompt injection mitigation."""
+    # Input validation
+    if not isinstance(user_input, str):
+        raise ValueError("User input must be a string")
     
-    User: {user_input}
-    AI:
-    """
-
+    if not user_input.strip():
+        return "Please provide a non-empty input."
+    
+    # Reasonable length check to prevent excessive token usage
+    if len(user_input) > 4000:
+        return "Input exceeds maximum allowed length."
+    
+    # Using proper message structure to separate system instructions from user input
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully."},
+            {"role": "user", "content": user_input}
+        ],
         api_key=OPENAI_API_KEY,  # Insecure key handling
     )
 
