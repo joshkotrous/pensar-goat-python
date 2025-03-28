@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os  # Added for environment variable access
 
 app = flask.Flask(__name__)
 
@@ -32,7 +33,7 @@ def login():
     if user:
         return f"Welcome {user[1]}!"
     return "Invalid credentials."
-
+@app.route("/")
 
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
@@ -42,7 +43,7 @@ def home():
     return (
         f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
     )
-
+def load_config():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
@@ -50,7 +51,7 @@ def load_config():
     with open("config.yaml", "r") as file:
         data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
     return data
-
+@app.route("/upload_xml", methods=["POST"])
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
@@ -60,7 +61,7 @@ def upload_xml():
     parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
-
+@app.route("/fetch")
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
@@ -69,6 +70,26 @@ def fetch():
     url = flask.request.args.get("url")
     response = requests.get(url, allow_redirects=True)
     return response.text
+    try:
+
+# ======== 6. Remote Code Execution via Paramiko ========
+def run_ssh_command():
+    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(
+        paramiko.AutoAddPolicy()
+    )  # Automatically accepting any key
+    ssh.connect("malicious-server.com", username="user", password="pass")
+    stdin, stdout, stderr = ssh.exec_command("ls")
+    return stdout.read()
+            return "Error: Host not in allowlist", 403
+
+if __name__ == "__main__":
+    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
