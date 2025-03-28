@@ -4,6 +4,9 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse
+import ipaddress
+import socket
 
 app = flask.Flask(__name__)
 
@@ -65,10 +68,46 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secure implementation against SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    if not url:
+        return "URL parameter is required", 400
+    
+    try:
+        # Parse and validate URL
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Validate scheme
+        if parsed_url.scheme not in ['http', 'https']:
+            return "URL scheme not allowed. Must be http or https", 403
+        
+        # Get hostname
+        hostname = parsed_url.netloc.split(':')[0].lower()
+        
+        # Block localhost and common internal hostnames
+        if hostname in ['localhost', '127.0.0.1', '::1', '0.0.0.0']:
+            return "Access to internal hosts is forbidden", 403
+        
+        # Block private IP ranges by checking IP directly or resolving hostname
+        try:
+            # Try to parse as IP address
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_reserved:
+                return "Access to internal IP addresses is forbidden", 403
+        except ValueError:
+            # Not an IP, try to resolve the hostname
+            try:
+                ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+                if ip.is_private or ip.is_loopback or ip.is_reserved:
+                    return "Access to internal IP addresses is forbidden", 403
+            except (socket.gaierror, ValueError):
+                pass  # Continue if hostname can't be resolved
+        
+        # Make the request with a timeout
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    except Exception as e:
+        return f"Error processing request: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
