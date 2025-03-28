@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
@@ -65,9 +66,34 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against URL redirection and SSRF attacks"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate URL format
+    if not url or not url.startswith(("http://", "https://")):
+        return "Invalid or missing URL", 400
+    
+    # Parse URL to extract hostname
+    parsed_url = urlparse(url)
+    hostname = parsed_url.hostname
+    
+    # Block localhost and common internal networks
+    blocked_hostnames = ["localhost", "127.0.0.1", "::1", "0.0.0.0"]
+    if hostname in blocked_hostnames or hostname.endswith((".local", ".internal")):
+        return "Access to internal networks is not allowed", 403
+    
+    # Whitelist of allowed domains
+    allowed_domains = ["example.com", "api.example.com", "trusted-site.com"]
+    if not any(hostname == domain or hostname.endswith(f".{domain}") for domain in allowed_domains):
+        return f"Requests to {hostname} are not allowed", 403
+    
+    # Make request without following redirects to prevent open redirect attacks
+    response = requests.get(url, allow_redirects=False)
+    
+    # Handle redirects securely
+    if 300 <= response.status_code < 400:
+        return "Request redirected. Redirects are not followed for security reasons.", 200
+    
     return response.text
 
 
