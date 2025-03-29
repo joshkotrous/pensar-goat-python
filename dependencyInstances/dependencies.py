@@ -84,4 +84,7 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Set debug mode based on environment variable, default to False for security
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', '').lower() == 'true'
+    app.run(debug=debug_mode)
