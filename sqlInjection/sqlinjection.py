@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 # Insecure database connection (no ORM, raw queries)
 conn = sqlite3.connect("users.db")
@@ -10,9 +11,17 @@ cursor.execute(
 )
 conn.commit()
 
-# Insert a test user (username: admin, password: secret)
+# SECURITY NOTICE: This code is for educational purposes to demonstrate SQL injection
+# For a real application, NEVER store sensitive credentials in code and ALWAYS use parameterized queries
+
+# Get demo credentials from environment variables or use defaults for demonstration
+demo_username = os.environ.get("DEMO_USERNAME", "demo_user")
+demo_password = os.environ.get("DEMO_PASSWORD", "demo_pass")
+
+# Insert a test user using parameterized query (safer)
 cursor.execute(
-    "INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'secret')"
+    "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)",
+    (demo_username, demo_password)
 )
 conn.commit()
 
@@ -34,7 +43,7 @@ def login(username, password):
 
 
 # User input (simulating a hacker's attempt)
-malicious_username = "admin' --"
+malicious_username = f"{demo_username}' --"
 malicious_password = "anything"
 
 # Attempt login with SQL injection
