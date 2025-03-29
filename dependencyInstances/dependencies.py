@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,30 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF with URL validation"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # URL validation to prevent SSRF
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Check scheme (only allow http and https)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Error: Only HTTP and HTTPS schemes are allowed", 400
+        
+        # Allowlist of permitted domains
+        allowed_domains = ['api.example.com', 'data.example.org', 'public-service.com']
+        hostname = parsed_url.netloc.split(':')[0]  # Remove port if present
+        
+        if not any(hostname.endswith(domain) for domain in allowed_domains):
+            return "Error: Domain not in allowlist", 403
+        
+        # Make the request
+        response = requests.get(url, allow_redirects=True)
+        return response.text
+        
+    except Exception as e:
+        return f"Error: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
