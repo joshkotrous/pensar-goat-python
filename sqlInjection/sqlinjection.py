@@ -11,6 +11,7 @@ cursor.execute(
 conn.commit()
 
 # Insert a test user (username: admin, password: secret)
+# NOTE: In production, credentials should be stored securely and not hardcoded
 cursor.execute(
     "INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'secret')"
 )
@@ -18,13 +19,12 @@ conn.commit()
 
 
 def login(username, password):
-    """Vulnerable authentication system using raw SQL queries."""
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
-
-    cursor.execute(query)
+    """Secure authentication system using parameterized SQL queries."""
+    # Use parameterized query to prevent SQL injection
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    
+    # Execute with parameters passed separately from the query
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,5 +37,5 @@ def login(username, password):
 malicious_username = "admin' --"
 malicious_password = "anything"
 
-# Attempt login with SQL injection
+# Attempt login with SQL injection (now secured)
 login(malicious_username, malicious_password)
