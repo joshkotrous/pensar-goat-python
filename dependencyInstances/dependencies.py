@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL validation
+from markupsafe import escape  # Added import for HTML escaping
 
 app = flask.Flask(__name__)
 
@@ -19,14 +21,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Secured against SQL Injection using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,18 +37,17 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Protected against XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Escape user input to prevent XSS
+    return f"<h1>Welcome, {escape(user_input)}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe_load instead of unsafe loader
     return data
 
 
@@ -57,7 +56,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +64,38 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from a URL (with SSRF protection)"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL before making request
+    if not url:
+        return "Error: URL parameter is required", 400
+    
+    try:
+        # Parse the URL to validate components
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Ensure the scheme is http or https
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Error: Only HTTP and HTTPS protocols are allowed", 403
+        
+        # Prevent access to private IPs, localhost, etc.
+        hostname = parsed_url.netloc.split(':')[0]
+        
+        # Check for localhost and private IPs
+        if hostname in ['localhost', '127.0.0.1', '::1'] or \
+           hostname.startswith('10.') or \
+           hostname.startswith('192.168.') or \
+           (hostname.startswith('172.') and 
+            16 <= int(hostname.split('.')[1]) <= 31):
+            return "Error: Access to internal addresses is restricted", 403
+        
+        # Now make the request with the validated URL
+        response = requests.get(url, allow_redirects=True)
+        return response.text
+    
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
@@ -84,4 +111,6 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode)
