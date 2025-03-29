@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 # Insecure database connection (no ORM, raw queries)
 conn = sqlite3.connect("users.db")
@@ -10,11 +11,18 @@ cursor.execute(
 )
 conn.commit()
 
-# Insert a test user (username: admin, password: secret)
-cursor.execute(
-    "INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'secret')"
-)
-conn.commit()
+# For testing purposes, get test credentials from environment variables
+# In a production environment, use a proper authentication system
+test_username = os.environ.get("TEST_USERNAME")
+test_password = os.environ.get("TEST_PASSWORD")
+
+# Only insert test user if environment variables are set
+if test_username and test_password:
+    cursor.execute(
+        "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)",
+        (test_username, test_password)
+    )
+    conn.commit()
 
 
 def login(username, password):
