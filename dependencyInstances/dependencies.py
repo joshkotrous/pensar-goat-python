@@ -62,11 +62,51 @@ def upload_xml():
     return ET.tostring(tree)
 
 
+# Helper function to validate URLs for SSRF prevention
+def is_safe_url(url):
+    """Check if a URL is safe to fetch (prevent SSRF)"""
+    # Basic validation - ensure URL starts with http:// or https://
+    if not url.startswith(('http://', 'https://')):
+        return False
+    
+    # Extract the hostname
+    try:
+        hostname = url.split('://', 1)[1].split('/', 1)[0].split(':', 1)[0]
+    except IndexError:
+        return False
+    
+    # Check for unsafe hostnames
+    unsafe_patterns = [
+        'localhost', '127.', '0.0.0.0', 
+        '10.', 
+        '192.168.', 
+        'internal', 'local', 'intranet'
+    ]
+    # Check for various 172.16-31 ranges (private IP addresses)
+    for i in range(16, 32):
+        unsafe_patterns.append(f'172.{i}.')
+    
+    hostname_lower = hostname.lower()
+    for pattern in unsafe_patterns:
+        if pattern in hostname_lower:
+            return False
+    
+    return True
+
+
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF"""
     url = flask.request.args.get("url")
+    
+    # Validate URL to prevent SSRF
+    if not url:
+        return "Missing URL parameter", 400
+    
+    if not is_safe_url(url):
+        return "URL validation failed - possible SSRF attempt", 403
+    
     response = requests.get(url, allow_redirects=True)
     return response.text
 
