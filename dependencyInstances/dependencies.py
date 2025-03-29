@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # For URL validation
 
 app = flask.Flask(__name__)
 
@@ -65,10 +66,51 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against Open Redirect vulnerabilities"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Basic URL validation
+    if not url:
+        return "Error: No URL provided", 400
+    
+    try:
+        parsed_url = urlparse(url)
+        
+        # Ensure scheme is http or https
+        if parsed_url.scheme not in ('http', 'https'):
+            return "Error: URL must use http or https scheme", 400
+            
+        # Ensure hostname is not empty
+        if not parsed_url.netloc:
+            return "Error: Invalid URL format", 400
+            
+        # Block localhost and internal hostnames
+        hostname = parsed_url.netloc.split(':')[0].lower()  # Extract hostname without port
+        
+        # Check for localhost and loopback addresses
+        if (hostname == 'localhost' or hostname.startswith('127.') or 
+            hostname == '::1' or hostname == '[::1]'):
+            return "Error: Access to localhost is not allowed", 403
+            
+        # Block common private network IP ranges
+        private_patterns = [
+            '10.', '192.168.', 
+            # 172.16.0.0 to 172.31.255.255
+            '172.16.', '172.17.', '172.18.', '172.19.',
+            '172.20.', '172.21.', '172.22.', '172.23.',
+            '172.24.', '172.25.', '172.26.', '172.27.',
+            '172.28.', '172.29.', '172.30.', '172.31.'
+        ]
+        
+        if any(hostname.startswith(pattern) for pattern in private_patterns):
+            return "Error: Access to internal networks is not allowed", 403
+            
+        # Now it's safe to make the request
+        response = requests.get(url, allow_redirects=True)
+        return response.text
+        
+    except Exception as e:
+        return f"Error: Invalid URL - {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
