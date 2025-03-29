@@ -11,20 +11,21 @@ cursor.execute(
 conn.commit()
 
 # Insert a test user (username: admin, password: secret)
+# Note: In a real application, you would use a more secure method for storing credentials
+# and the password would be properly hashed
 cursor.execute(
-    "INSERT OR IGNORE INTO users (username, password) VALUES ('admin', 'secret')"
+    "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)",
+    ('admin', 'secret')
 )
 conn.commit()
 
 
 def login(username, password):
-    """Vulnerable authentication system using raw SQL queries."""
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    print(f"Executing Query: {query}")  # Debugging purpose (reveals injection point)
+    """Secure authentication system using parameterized queries."""
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    print(f"Executing Query: {query} with parameters: {username}, {password}")  # Debugging purpose
 
-    cursor.execute(query)
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
