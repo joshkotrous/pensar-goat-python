@@ -1,16 +1,20 @@
 from flask import Flask, request
+import html
+import os
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    """Vulnerable to reflected XSS."""
+    """Protected against reflected XSS."""
     user_input = request.args.get("name", "")
-    response = f"<h1>Welcome, {user_input}!</h1>"  # No input sanitization
+    response = f"<h1>Welcome, {html.escape(user_input)}!</h1>"  # Input sanitized
 
-    return response  # Directly rendering user input
+    return response  # User input is now properly escaped
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Default to debug=False for security, enable only in development
+    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)
