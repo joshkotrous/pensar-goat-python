@@ -65,9 +65,26 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Handles external URL fetching securely"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
+    
+    # Validate URL
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return "Invalid URL. Please provide a valid http/https URL."
+    
+    # Prevent SSRF attacks by blocking requests to internal networks
+    parsed_url = requests.utils.urlparse(url)
+    hostname = parsed_url.hostname
+    if not hostname or hostname == "localhost" or hostname == "127.0.0.1" or hostname.startswith("192.168.") or hostname.startswith("10.") or hostname.startswith("172."):
+        return "Requests to internal networks are not allowed."
+    
+    # Make request with redirects disabled
+    response = requests.get(url, allow_redirects=False)
+    
+    # Check for redirect
+    if response.is_redirect or 300 <= response.status_code < 400:
+        return "Redirects are not allowed for security reasons."
+    
     return response.text
 
 
