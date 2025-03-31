@@ -4,8 +4,26 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
+
+# Added URL validation function for SSRF protection
+def is_url_safe(url):
+    """
+    Validate if a URL is safe to make a request to.
+    Only allows specific schemes and hosts.
+    """
+    # Define your trusted domains here
+    allowed_schemes = ['https']  # Only allowing HTTPS for security
+    allowed_hosts = ['api.example.com', 'data.example.org']  
+    
+    try:
+        parsed_url = urllib.parse.urlparse(url)
+        return (parsed_url.scheme in allowed_schemes and 
+                parsed_url.netloc in allowed_hosts)
+    except Exception:
+        return False
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -65,10 +83,30 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Safely fetch external resources with SSRF protection"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate the URL against our allowlist
+    if not url or not is_url_safe(url):
+        return "Invalid or unsupported URL", 400
+    
+    try:
+        # Make the request with security measures
+        response = requests.get(
+            url, 
+            allow_redirects=False,  # Prevent redirects to untrusted domains
+            timeout=10             # Set a timeout to prevent long-running requests
+        )
+        
+        # Return only metadata about the response, not the actual content
+        # This prevents leaking potentially sensitive data
+        return flask.jsonify({
+            "status_code": response.status_code,
+            "content_type": response.headers.get('Content-Type'),
+            "content_length": len(response.content)
+        })
+    except requests.RequestException:
+        return "Error fetching URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
