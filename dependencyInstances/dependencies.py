@@ -37,10 +37,12 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Previously vulnerable to XSS, now fixed with proper escaping"""
     user_input = flask.request.args.get("name", "")
+    # Escape the user input to prevent XSS
+    user_input = flask.escape(user_input)
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {user_input}!</h1>"
     )
 
 
