@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os  # Added to access environment variables
 
 app = flask.Flask(__name__)
 
@@ -19,14 +20,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability by using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -39,25 +38,23 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    return f"<h1>Welcome, {flask.escape(user_input)}!</h1>"  # Sanitized input to prevent XSS
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Vulnerable to XXE"""
+    """Protected against XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,10 +62,45 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
-    url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    """Safely handle external URL fetching with validation"""
+    from urllib.parse import urlparse
+    import ipaddress
+    
+    url = flask.request.args.get("url", "")
+    
+    # Validate URL
+    try:
+        parsed_url = urlparse(url)
+        
+        # Ensure scheme is http or https
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Error: Only HTTP and HTTPS protocols are allowed", 400
+            
+        hostname = parsed_url.hostname
+        if not hostname:
+            return "Error: Invalid URL", 400
+            
+        # Block localhost and common internal hostnames
+        forbidden_hosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1']
+        if hostname in forbidden_hosts:
+            return "Error: Access to internal hosts is forbidden", 403
+            
+        # Check if hostname is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            # Block private networks
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return "Error: Access to internal networks is forbidden", 403
+        except ValueError:
+            # Not an IP address, continue with hostname checks
+            pass
+            
+        # Make the request with limited redirects and timeout
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
@@ -84,4 +116,6 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Get debug mode from environment variable, default to False for security
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode)
