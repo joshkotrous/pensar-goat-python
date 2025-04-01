@@ -1,9 +1,11 @@
+import os
 import sqlite3
 import yaml  # Vulnerable to arbitrary code execution
 import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from markupsafe import escape  # Added import for HTML escaping
 
 app = flask.Flask(__name__)
 
@@ -19,14 +21,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability by using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,27 +37,27 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
-    user_input = flask.request.args.get("name", "")
+    """Previously vulnerable to XSS, now fixed with proper escaping"""
+    user_input = escape(flask.request.args.get("name", ""))
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {user_input}!</h1>"  # User input is now escaped
     )
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Previously vulnerable to Arbitrary Code Execution, now fixed"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safer yaml.safe_load()
     return data
 
 
 # ======== 4. External XML Entity (XXE) Attack ========
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Vulnerable to XXE"""
+    """Previously vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,23 +65,107 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Secured against SSRF vulnerabilities"""
+    import urllib.parse
+    import ipaddress
+    import re
+    
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    if not url:
+        return "No URL provided", 400
+    
+    # Validate URL to prevent SSRF
+    try:
+        # Parse the URL
+        parsed = urllib.parse.urlparse(url)
+        
+        # Check if scheme is allowed
+        if parsed.scheme not in ['http', 'https']:
+            return "Invalid URL scheme. Only HTTP and HTTPS are allowed.", 403
+        
+        # Ensure a hostname is present
+        if not parsed.netloc:
+            return "Invalid URL format.", 403
+        
+        hostname = parsed.netloc.split(':')[0]
+        
+        # Check if the hostname is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            
+            # Block access to private/internal networks
+            if (ip.is_private or ip.is_loopback or ip.is_reserved or 
+                ip.is_multicast or ip.is_link_local):
+                return "Access to internal networks is not allowed.", 403
+        except ValueError:
+            # Not a standard IP address format
+            pass
+            
+        # Check for different IP formats (decimal, octal, hex)
+        if re.match(r'^[0-9]+$', hostname) or '0x' in hostname.lower():
+            return "IP address formats not allowed.", 403
+            
+        # Block common internal hostnames
+        internal_hostnames = [
+            'localhost', 'internal', 'intranet', 'admin', 'local', 
+            'corp', 'private', 'db', 'database', 'api', 'int'
+        ]
+        
+        if any(name in hostname.lower() for name in internal_hostnames):
+            return "Access to internal networks is not allowed.", 403
+                
+    except Exception:
+        return "URL validation failed. Please provide a valid public URL.", 403
+    
+    # URL is valid, proceed with the request
+    try:
+        # Use a timeout to prevent hanging connections
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    except requests.exceptions.RequestException:
+        return "Error fetching URL", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(server=None, username=None, password=None, command="ls", known_hosts_path=None):
+    """
+    Execute a command via SSH on a remote server with proper host key verification.
+    
+    Args:
+        server (str): The SSH server hostname or IP
+        username (str): The SSH username
+        password (str): The SSH password
+        command (str): The command to execute
+        known_hosts_path (str, optional): Path to the known_hosts file
+    
+    Returns:
+        bytes: The command output
+        
+    Raises:
+        ValueError: If server, username or password is not provided
+        paramiko.ssh_exception.SSHException: If connection fails
+    """
+    if not server or not username or not password:
+        raise ValueError("Server, username, and password must be provided")
+    
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load system host keys for verification
+    ssh.load_system_host_keys(known_hosts_path)
+    
+    # Use RejectPolicy instead of AutoAddPolicy
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect(server, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Get debug mode from environment variable, default to False for security
+    debug_mode = os.environ.get('FLASK_DEBUG', '').lower() == 'true'
+    app.run(debug=debug_mode)
