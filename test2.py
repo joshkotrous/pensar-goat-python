@@ -4,6 +4,8 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import os  # Added to access environment variables
+from urllib.parse import urlparse  # Added for URL validation
 
 app = flask.Flask(__name__)
 
@@ -23,10 +25,8 @@ def login():
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,18 +37,18 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Previously vulnerable to XSS - Fixed with input sanitization"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Sanitize user input to prevent XSS
+    sanitized_input = flask.escape(user_input)
+    return f"<h1>Welcome, {sanitized_input}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe_load instead of unsafe yaml.load
     return data
 
 
@@ -57,7 +57,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,23 +65,56 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetch content from validated external URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Basic URL validation
+    if not url or not url.startswith(("http://", "https://")):
+        return "Invalid URL. Only HTTP/HTTPS protocols are allowed.", 400
+    
+    # Simple checks to prevent access to internal resources
+    parsed_url = urlparse(url)
+    hostname = parsed_url.netloc.split(":", 1)[0]  # Remove port if present
+    
+    # Block localhost and common internal patterns
+    if (hostname == "localhost" or 
+        hostname == "127.0.0.1" or 
+        hostname.startswith("192.168.") or
+        hostname.startswith("10.") or
+        hostname.startswith("172.16.") or
+        hostname.endswith((".local", ".internal"))):
+        return "Access to internal resources is not allowed.", 403
+    
+    try:
+        # Disable redirects to prevent redirect-based attacks
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # If it's a redirect, inform the user
+        if response.is_redirect:
+            return "The requested URL redirects to another location. Redirects are not allowed.", 403
+            
+        return response.text
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 500
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Secure SSH connection with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    ssh.load_system_host_keys()  # Load system host keys
+    # Reject unknown host keys instead of automatically accepting them
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        ssh.connect("server.example.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.SSHException as e:
+        return f"SSH connection error: {str(e)}"
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use environment variable to control debug mode
+    # Defaults to False for security in production
+    debug_mode = os.environ.get("FLASK_DEBUG", "").lower() == "true"
+    app.run(debug=debug_mode)
