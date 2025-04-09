@@ -1,9 +1,12 @@
 import sqlite3
 import yaml  # Vulnerable to arbitrary code execution
 import flask  # Vulnerable Flask version
+from flask import escape  # Import for HTML escaping
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+from urllib.parse import urlparse  # Added for URL validation
+import os  # Added for environment variable support
 
 app = flask.Flask(__name__)
 
@@ -19,14 +22,13 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Protected against SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    # Use parameterized query instead of string interpolation
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -37,18 +39,18 @@ def login():
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """Fixed XSS vulnerability with proper escaping"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    # Sanitize user input using Flask's escape function
+    safe_input = escape(user_input)
+    return f"<h1>Welcome, {safe_input}!</h1>"
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Fixed: Safe YAML loading"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe_load to prevent code execution
     return data
 
 
@@ -57,7 +59,7 @@ def load_config():
 def upload_xml():
     """Vulnerable to XXE"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)  # XXE enabled
+    parser = ET.XMLParser(resolve_entities=False)  # XXE disabled
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
@@ -65,23 +67,60 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fixed to prevent open redirects and SSRF"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL to prevent open redirects and SSRF
+    allowed_domains = ["example.com", "api.example.com"]  # Define your trusted domains
+    
+    # Basic validation - check if URL is properly formed
+    if not url or not url.startswith(('http://', 'https://')):
+        return "Invalid URL format", 400
+    
+    # Parse URL to extract domain
+    try:
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+        
+        # Check if domain is in allowed list
+        if domain not in allowed_domains:
+            return f"Access to domain '{domain}' is not allowed", 403
+            
+        # Make request without following redirects
+        response = requests.get(url, allow_redirects=False)
+        
+        # Check if the response is a redirect
+        if response.is_redirect:
+            return "Request resulted in a redirect, which is not allowed", 403
+            
+        return response.text
+        
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Securely connect to SSH server with proper host key validation"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load known hosts from the default location (~/.ssh/known_hosts)
+    ssh.load_system_host_keys()
+    
+    # Use RejectPolicy to reject connections to unknown hosts
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        ssh.connect("malicious-server.com", username="user", password="pass")
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        return stdout.read()
+    except paramiko.ssh_exception.SSHException as e:
+        # Handle host key verification failures and other SSH exceptions
+        return f"SSH connection failed: {str(e)}"
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)
