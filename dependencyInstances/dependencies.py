@@ -19,14 +19,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability by using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -72,15 +70,23 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname="example.com", username="user", password="pass"):
+    """Secure SSH connection with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    # Load host keys from system's known_hosts file
+    ssh.load_system_host_keys()
+    
+    # Connect with explicit host key verification
+    try:
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        result = stdout.read()
+        ssh.close()
+        return result
+    except paramiko.SSHException as e:
+        return f"SSH Error: {str(e)}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 if __name__ == "__main__":
