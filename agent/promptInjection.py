@@ -1,11 +1,17 @@
 import openai
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Secure API key handling from environment variables
+# No hardcoded credentials
 
 
 def ai_agent(user_input):
     """A vulnerable AI agent with prompt injection risk."""
+    # Get API key from environment
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return "Error: API key not available. Please set the OPENAI_API_KEY environment variable."
+    
     prompt = f"""
     You are a helpful AI assistant. Answer the user's query truthfully.
     
@@ -16,7 +22,7 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        api_key=api_key,  # Using securely obtained API key
     )
 
     return response["choices"][0]["message"]["content"]
