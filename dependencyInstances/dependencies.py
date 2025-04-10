@@ -19,14 +19,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Protected against SQL Injection using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -46,9 +44,9 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Loads configuration from a YAML file safely"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe_load to prevent code execution
     return data
 
 
@@ -72,15 +70,60 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+def run_ssh_command(host, command, username=None, password=None, key_filename=None, auto_add_policy=False):
+    """Execute a command on a remote server via SSH with proper host key verification.
+    
+    Args:
+        host (str): The remote host to connect to.
+        command (str): The command to execute.
+        username (str, optional): SSH username.
+        password (str, optional): SSH password.
+        key_filename (str, optional): Path to private key file.
+        auto_add_policy (bool, optional): Whether to automatically add unknown host keys.
+            Default is False for security.
+    
+    Returns:
+        str: Command output or error message.
+    """
+    try:
+        ssh = paramiko.SSHClient()
+        # Load system host keys first
+        ssh.load_system_host_keys()
+        
+        # Only use AutoAddPolicy if explicitly requested, otherwise use RejectPolicy
+        if auto_add_policy:
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        else:
+            ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+        
+        # Connect with the provided credentials
+        connect_kwargs = {
+            "hostname": host,
+        }
+        
+        if username:
+            connect_kwargs["username"] = username
+        if password:
+            connect_kwargs["password"] = password
+        if key_filename:
+            connect_kwargs["key_filename"] = key_filename
+            
+        ssh.connect(**connect_kwargs)
+        
+        # Execute the command
+        stdin, stdout, stderr = ssh.exec_command(command)
+        output = stdout.read().decode('utf-8')
+        
+        return output
+    except paramiko.SSHException as e:
+        return f"SSH Error: {str(e)}"
+    except paramiko.AuthenticationException:
+        return "Authentication failed"
+    except Exception as e:
+        return f"Error: {str(e)}"
+    finally:
+        if 'ssh' in locals():
+            ssh.close()
 
 
 if __name__ == "__main__":
