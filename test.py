@@ -19,14 +19,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -46,9 +44,9 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Fixed: Using yaml.safe_load to prevent Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using yaml.safe_load() instead of yaml.load()
     return data
 
 
@@ -72,15 +70,45 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(host, username, password, command, known_hosts_file=None):
+    """
+    Execute a command on an SSH server with proper security checks.
+    
+    Args:
+        host (str): The hostname or IP address of the SSH server
+        username (str): SSH username
+        password (str): SSH password
+        command (str): The command to execute
+        known_hosts_file (str, optional): Path to known_hosts file. If None, system default is used.
+        
+    Returns:
+        str: Command output
+        
+    Raises:
+        paramiko.ssh_exception.SSHException: If there are SSH-related errors
+        ValueError: If parameters are invalid
+    """
+    if not all([host, username, password, command]):
+        raise ValueError("Missing required SSH parameters")
+        
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    
+    # Load system host keys
+    ssh.load_system_host_keys(known_hosts_file)
+    
+    # Use RejectPolicy to reject unknown host keys by default
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        # Connect with timeout for safety
+        ssh.connect(host, username=username, password=password, timeout=10)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        output = stdout.read()
+        ssh.close()
+        return output
+    except Exception as e:
+        ssh.close()
+        raise e
 
 
 if __name__ == "__main__":
