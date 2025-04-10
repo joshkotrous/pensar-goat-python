@@ -1,7 +1,5 @@
 import openai
-
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+import os
 
 
 def ai_agent(user_input):
@@ -16,7 +14,7 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        api_key=os.environ.get("OPENAI_API_KEY"),  # Retrieve API key from environment variable
     )
 
     return response["choices"][0]["message"]["content"]
