@@ -5,17 +5,15 @@ OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are a helpful AI assistant. Answer the user's query truthfully.
-    
-    User: {user_input}
-    AI:
-    """
-
+    """A more secure AI agent with reduced prompt injection risk."""
+    # Using the messages array properly with separate system and user messages
+    # rather than embedding user input in a prompt string
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant. Answer the user's query truthfully."},
+            {"role": "user", "content": user_input}
+        ],
         api_key=OPENAI_API_KEY,  # Insecure key handling
     )
 
