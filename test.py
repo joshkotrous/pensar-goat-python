@@ -4,10 +4,11 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import urllib.parse  # Added for URL parsing
+import os  # Import os for environment variables
 
 app = flask.Flask(__name__)
 
+# ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
 cursor = conn.cursor()
@@ -80,11 +81,13 @@ def fetch():
         # Check if scheme and domain are in the whitelist
         if parsed_url.scheme not in allowed_schemes:
             return "Only HTTPS URLs are allowed", 403
-            
-        if parsed_url.netloc not in allowed_domains:
-            return "This domain is not in the allowed list", 403
-            
-        # Make the request with a reasonable timeout
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    # Get debug mode from environment variable, default to False for security
+    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode)
         response = requests.get(url, allow_redirects=True, timeout=10)
         return response.text
     except Exception as e:
