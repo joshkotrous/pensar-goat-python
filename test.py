@@ -42,17 +42,17 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {escape(user_input)}!</h1>"  # Sanitized user input to prevent XSS
-    )
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerability fixed by using safe_load"""
+    """Secure YAML loading"""
     with open("config.yaml", "r") as file:
-        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
+        data = yaml.safe_load(file)  # Using safe_load instead of unsafe yaml.load()
     return data
+
+
+# ======== 4. External XML Entity (XXE) Attack ========
 
 
 # ======== 4. External XML Entity (XXE) Attack ========
@@ -80,11 +80,11 @@ def fetch():
         
         # Check if URL scheme is http or https (no file:// or other protocols)
         if parsed_url.scheme not in ['http', 'https']:
-            return "Invalid URL scheme. Only HTTP and HTTPS are supported.", 400
-        
-        # Prevent access to internal/private IP addresses and localhost
-        hostname = parsed_url.netloc.split(':')[0]
-        if hostname in ['localhost', '127.0.0.1', '::1'] or re.match(r'^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])\.|^127\.|^0\.', hostname):
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
             return "Access to internal networks is not allowed", 403
         
         # Disable redirects to prevent unintended access to sensitive endpoints
