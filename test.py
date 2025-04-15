@@ -68,23 +68,58 @@ def upload_xml():
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Fetches content from whitelisted URLs"""
-    url = flask.request.args.get("url")
+    return response.text
+
+
+# ======== 6. Remote Code Execution via Paramiko ========
+def run_ssh_command(hostname="malicious-server.com", username="user", password="pass", command="ls", auto_add_key=False):
+    """Execute a command via SSH with proper host key verification
     
-    # Whitelist of allowed domains and schemes
-    allowed_domains = ['api.example.com', 'public-api.org', 'data.gov']
-    allowed_schemes = ['https']
+    Args:
+        hostname (str): SSH server hostname or IP
+        username (str): SSH username
+        password (str): SSH password
+        command (str): Command to execute on the server
+        auto_add_key (bool): If True, automatically add unknown host keys.
+                            WARNING: This is insecure and should only be used in trusted environments.
+    
+    Returns:
+        bytes: Command output
+        
+    Raises:
+        ValueError: If parameters are invalid
+        paramiko.SSHException: If SSH connection fails
+    """
+    if not hostname or not username:
+        raise ValueError("Hostname and username are required")
+    
+    # Basic command validation
+    if not isinstance(command, str) or any(c in command for c in [';', '&', '|', '`']):
+        raise ValueError("Invalid command format")
+    
+    ssh = paramiko.SSHClient()
+    
+    # Load system host keys
+    ssh.load_system_host_keys()
+    
+    if auto_add_key:
+        # This is insecure but sometimes needed in trusted environments
+        print("WARNING: Automatically adding unknown host keys. This is insecure!")
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    else:
+        # Use RejectPolicy which will reject connections to unknown servers
+        ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     
     try:
-        # Parse the URL
-        parsed_url = urllib.parse.urlparse(url)
-        
-        # Check if scheme and domain are in the whitelist
-        if parsed_url.scheme not in allowed_schemes:
-    return stdout.read()
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command(command)
+        return stdout.read()
+    finally:
+        ssh.close()
 
 
 if __name__ == "__main__":
+    app.run(debug=True)
     app.run(debug=True)
     # Get debug mode from environment variable, default to False for security
     debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
