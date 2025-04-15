@@ -1,10 +1,11 @@
 import sqlite3
 import yaml  # Vulnerable to arbitrary code execution
 import flask  # Vulnerable Flask version
+from markupsafe import escape  # Added for HTML escaping
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import os  # Added to access environment variables
+
 
 app = flask.Flask(__name__)
 
@@ -33,19 +34,17 @@ def login():
     return "Invalid credentials."
 
 
+
 # ======== 2. XSS Vulnerability ========
 @app.route("/")
 def home():
-    """Vulnerable to XSS"""
+    """XSS protection added"""
     user_input = flask.request.args.get("name", "")
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
-    )
+    return f"<h1>Welcome, {escape(user_input)}!</h1>"  # Sanitized user input
 
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
         data = yaml.safe_load(file)  # Using safe_load to prevent code execution
     return data
@@ -80,11 +79,11 @@ def run_ssh_command():
     # Set policy to reject unknown host keys
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     
-    try:
-        ssh.connect("malicious-server.com", username="user", password="pass")
-        stdin, stdout, stderr = ssh.exec_command("ls")
-        return stdout.read()
-    except paramiko.ssh_exception.SSHException as e:
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
         return f"SSH connection error: {str(e)}"
     finally:
         ssh.close()
