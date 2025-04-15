@@ -44,15 +44,15 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
-    # Sanitize user input to prevent XSS
-    user_input = escape(user_input)
-    return (
-        f"<h1>Welcome, {user_input}!</h1>"
-    )
-
-
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
+    """Vulnerable to Arbitrary Code Execution"""
+    with open("config.yaml", "r") as file:
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
+    return data
+
+
+# ======== 4. External XML Entity (XXE) Attack ========
     """Loads configuration safely"""
     with open("config.yaml", "r") as file:
         data = yaml.safe_load(file)  # Using safe YAML loading
@@ -80,11 +80,11 @@ def fetch():
     try:
         parsed_url = urlparse(url)
         
-        # Check protocol - only allow http and https
-        if parsed_url.scheme not in ['http', 'https']:
-            return "Only HTTP and HTTPS protocols are allowed", 403
-        
-        # Check against whitelist of allowed domains
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
         if parsed_url.netloc not in ALLOWED_DOMAINS:
             return f"Domain not in whitelist. Allowed domains: {', '.join(ALLOWED_DOMAINS)}", 403
         
