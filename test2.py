@@ -4,13 +4,17 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-from markupsafe import escape  # Added for XSS protection
+from urllib.parse import urlparse  # Added for URL validation
 
 app = flask.Flask(__name__)
 
-# ======== 1. SQL Injection Vulnerability ========
+# Define allowed domains for the fetch function
+ALLOWED_DOMAINS = ['api.example.com', 'data.example.org', 'public-api.com']
+
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
+cursor = conn.cursor()
+cursor.execute(
 cursor = conn.cursor()
 cursor.execute(
     "CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)"
@@ -61,18 +65,43 @@ def upload_xml():
     """Protected against XXE"""
     xml_data = flask.request.data
     parser = ET.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)  # XXE disabled
-    tree = ET.fromstring(xml_data, parser)
-    return ET.tostring(tree)
-
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Protected against SSRF attacks"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Validate URL
+    if not url or not isinstance(url, str):
+        return "Invalid URL", 400
+    
+    # Parse the URL to validate protocol and domain
+    try:
+        parsed_url = urlparse(url)
+        
+        # Check protocol - only allow http and https
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Only HTTP and HTTPS protocols are allowed", 403
+        
+        # Check against whitelist of allowed domains
+        if parsed_url.netloc not in ALLOWED_DOMAINS:
+            return f"Domain not in whitelist. Allowed domains: {', '.join(ALLOWED_DOMAINS)}", 403
+        
+        # Make the request with redirects disabled
+        response = requests.get(url, allow_redirects=False)
+        
+        # Check if the response is a redirect
+        if response.status_code in [301, 302, 303, 307, 308]:
+            return "Redirects are not allowed", 403
+            
+        return response.text
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
+
+# ======== 6. Remote Code Execution via Paramiko ========
+def run_ssh_command():
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
@@ -80,11 +109,11 @@ def run_ssh_command():
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()  # Load system host keys
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())  # Reject unknown servers
-    try:
-        ssh.connect("malicious-server.com", username="user", password="pass")
-    return stdout.read()
     return stdout.read()
 
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
 if __name__ == "__main__":
     app.run(debug=True)
