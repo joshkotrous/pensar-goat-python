@@ -44,11 +44,11 @@ def home():
     user_input = flask.request.args.get("name", "")
     return f"<h1>Welcome, {escape(user_input)}!</h1>"  # Sanitized user input
 
-
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
+    """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.safe_load(file)  # Using safe_load to prevent code execution
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
@@ -80,11 +80,11 @@ def is_valid_url(url):
             return False
             
         # Prevent localhost access
-        hostname = parsed.netloc.split(':')[0].lower()
-        if hostname in ['localhost', '127.0.0.1', '::1']:
-            return False
-            
-        # Check for private IP addresses
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
         try:
             ip = ipaddress.ip_address(hostname)
             if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_unspecified:
