@@ -1,8 +1,11 @@
 import openai
 import re
+import os
 
-# Insecure API key handling
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# Secure API key handling using environment variables
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("The OPENAI_API_KEY environment variable is not set. Please set it with your API key.")
 
 
 def sanitize_input(user_input):
@@ -77,7 +80,7 @@ def ai_agent(user_input):
                 "content": sanitized_input
             }
         ],
-        api_key=OPENAI_API_KEY,  # Insecure key handling
+        api_key=OPENAI_API_KEY,
     )
     
     ai_response = response["choices"][0]["message"]["content"]
