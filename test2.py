@@ -4,10 +4,11 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import os  # Added for environment variable access
+from markupsafe import escape  # Added for XSS protection
 
 app = flask.Flask(__name__)
 
+# ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
 cursor = conn.cursor()
@@ -39,8 +40,10 @@ def login():
 def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
+    # Sanitize user input to prevent XSS
+    user_input = escape(user_input)
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {user_input}!</h1>"
     )
 
 
@@ -80,11 +83,11 @@ def run_ssh_command():
     try:
         ssh.connect("malicious-server.com", username="user", password="pass")
     return stdout.read()
+    return stdout.read()
 
 
 if __name__ == "__main__":
     app.run(debug=True)
-    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode)
 if __name__ == "__main__":
     app.run(debug=True)
