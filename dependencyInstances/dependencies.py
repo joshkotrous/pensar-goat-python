@@ -19,14 +19,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -46,9 +44,9 @@ def home():
 
 # ======== 3. Arbitrary Code Execution via YAML ========
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Safely load YAML configuration"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
@@ -73,12 +71,16 @@ def fetch():
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+    """Connect to SSH server with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
+    # Load host keys from standard locations
+    ssh.load_system_host_keys()
+    
+    # For unknown hosts, reject the connection
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    # For production use, replace with proper host, user and auth method
+    ssh.connect("server.example.com", username="user", password="pass")
     stdin, stdout, stderr = ssh.exec_command("ls")
     return stdout.read()
 
