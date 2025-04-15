@@ -4,10 +4,12 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-from markupsafe import escape  # Added for XSS protection
+import re
+from urllib.parse import urlparse
 
 app = flask.Flask(__name__)
 
+# ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
@@ -62,17 +64,44 @@ def upload_xml():
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
-
-# ======== 5. Insecure Request Handling ========
-
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    return response.text
+    """Secured against credential leakage in redirects"""
+    url = flask.request.args.get("url")
+    
+    # Validate the URL to prevent SSRF and accessing internal resources
+    if not url:
+        return "URL parameter is required", 400
+    
+    # Parse the URL to validate it
+    try:
+        parsed_url = urlparse(url)
+        
+        # Check if URL scheme is http or https (no file:// or other protocols)
+        if parsed_url.scheme not in ['http', 'https']:
+            return "Invalid URL scheme. Only HTTP and HTTPS are supported.", 400
+        
+        # Prevent access to internal/private IP addresses and localhost
+        hostname = parsed_url.netloc.split(':')[0]
+        if hostname in ['localhost', '127.0.0.1', '::1'] or re.match(r'^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[0-1])\.|^127\.|^0\.', hostname):
+            return "Access to internal networks is not allowed", 403
+        
+        # Disable redirects to prevent unintended access to sensitive endpoints
+        response = requests.get(url, allow_redirects=False, timeout=10)
+        
+        # Check if there was a redirect and inform the user
+        if response.status_code in [301, 302, 303, 307, 308]:
+            return "Request resulted in a redirect which was not followed for security reasons.", 200
+        
+        return response.text
+    
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command(hostname="malicious-server.com", username="user", password="pass", command="ls", auto_add_key=False):
+def run_ssh_command():
     """Execute a command via SSH with proper host key verification
     
     Args:
@@ -80,11 +109,11 @@ def run_ssh_command(hostname="malicious-server.com", username="user", password="
         username (str): SSH username
         password (str): SSH password
         command (str): Command to execute on the server
-        auto_add_key (bool): If True, automatically add unknown host keys.
-                            WARNING: This is insecure and should only be used in trusted environments.
-    
-    Returns:
-        bytes: Command output
+    return stdout.read()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
         
     Raises:
         ValueError: If parameters are invalid
