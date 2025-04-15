@@ -19,14 +19,13 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    # Using parameterized query with placeholders instead of string interpolation
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -48,7 +47,7 @@ def home():
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)  # Using unsafe yaml.load()
+        data = yaml.safe_load(file)  # Using safe yaml.safe_load()
     return data
 
 
@@ -72,15 +71,29 @@ def fetch():
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
-def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
+def run_ssh_command(hostname="example.com", username="user", password="pass"):
+    """Secure SSH connection with proper host key verification"""
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(
-        paramiko.AutoAddPolicy()
-    )  # Automatically accepting any key
-    ssh.connect("malicious-server.com", username="user", password="pass")
-    stdin, stdout, stderr = ssh.exec_command("ls")
-    return stdout.read()
+    # Load known hosts file
+    ssh.load_system_host_keys()
+    
+    # Use RejectPolicy to refuse connections to unknown hosts
+    # This prevents automatic connections to potentially malicious servers
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+    
+    try:
+        # Connect with verification of host keys
+        ssh.connect(hostname, username=username, password=password)
+        stdin, stdout, stderr = ssh.exec_command("ls")
+        result = stdout.read()
+        ssh.close()
+        return result
+    except paramiko.SSHException as e:
+        # Handle SSH exceptions properly
+        return f"SSH error: {str(e)}"
+    except Exception as e:
+        # Handle other exceptions
+        return f"Error: {str(e)}"
 
 
 if __name__ == "__main__":
