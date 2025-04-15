@@ -1,13 +1,15 @@
 import sqlite3
 import yaml  # Vulnerable to arbitrary code execution
 import flask  # Vulnerable Flask version
-from markupsafe import escape  # Added for HTML escaping
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-
+from urllib.parse import urlparse
+import ipaddress
 
 app = flask.Flask(__name__)
+
+# ======== 1. SQL Injection Vulnerability ========
 
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -58,21 +60,67 @@ def upload_xml():
     parser = ET.XMLParser(resolve_entities=False)  # Disable external entity resolution
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
+    tree = ET.fromstring(xml_data, parser)
+    return ET.tostring(tree)
+
+
+# Function to validate URLs and prevent SSRF
+def is_valid_url(url):
+    """Validate URL to prevent SSRF attacks."""
+    try:
+        # Check if URL is properly formatted
+        parsed = urlparse(url)
+        
+        # Ensure scheme is http or https
+        if parsed.scheme not in ['http', 'https']:
+            return False
+        
+        # Check if hostname is provided
+        if not parsed.netloc:
+            return False
+            
+        # Prevent localhost access
+        hostname = parsed.netloc.split(':')[0].lower()
+        if hostname in ['localhost', '127.0.0.1', '::1']:
+            return False
+            
+        # Check for private IP addresses
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_unspecified:
+                return False
+        except ValueError:
+            # Not an IP address, continue with other checks
+            pass
+            
+        # Domain allowlist - uncomment and customize based on application needs
+        # allowed_domains = ['api.example.com', 'data.example.org', 'trusted-source.com']
+        # if not any(hostname == domain or hostname.endswith('.' + domain) for domain in allowed_domains):
+        #     return False
+            
+        return True
+    except Exception:
+        return False
 
 
 # ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Securely fetch content from external URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
-
+    
+    if not url or not is_valid_url(url):
+        return "Invalid or disallowed URL", 400
+        
+    try:
+        response = requests.get(url, allow_redirects=True, timeout=5)
+        return response.text
+    except requests.RequestException:
+        return "Error fetching URL", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Securely connect to an SSH server with proper host key verification"""
     ssh = paramiko.SSHClient()
     # Load system host keys
     ssh.load_system_host_keys()
@@ -80,11 +128,11 @@ def run_ssh_command():
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     
     return stdout.read()
+    return stdout.read()
 
 
 if __name__ == "__main__":
     app.run(debug=True)
-        return f"SSH connection error: {str(e)}"
     finally:
         ssh.close()
 
