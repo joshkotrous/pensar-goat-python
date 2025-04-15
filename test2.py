@@ -15,22 +15,21 @@ cursor.execute(
     "CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, password TEXT)"
 )
 cursor.execute("INSERT INTO users (username, password) VALUES ('admin', 'password123')")
-conn.commit()
 
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed SQL Injection vulnerability by using parameterized query"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    # Use parameterized query to prevent SQL injection
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
+        return f"Welcome {user[1]}!"
         return f"Welcome {user[1]}!"
     return "Invalid credentials."
 
@@ -80,11 +79,11 @@ def run_ssh_command():
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())  # Reject unknown servers
     try:
         ssh.connect("malicious-server.com", username="user", password="pass")
-        stdin, stdout, stderr = ssh.exec_command("ls")
     return stdout.read()
 
 
 if __name__ == "__main__":
+    app.run(debug=True)
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(debug=debug_mode)
 if __name__ == "__main__":
