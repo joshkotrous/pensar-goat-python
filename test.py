@@ -4,10 +4,11 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
-import os  # Import os for environment variables
+from markupsafe import escape  # Added for XSS protection
 
 app = flask.Flask(__name__)
 
+# ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 # ======== 1. SQL Injection Vulnerability ========
 conn = sqlite3.connect(":memory:")
@@ -40,7 +41,7 @@ def home():
     """Vulnerable to XSS"""
     user_input = flask.request.args.get("name", "")
     return (
-        f"<h1>Welcome, {user_input}!</h1>"  # No sanitization, allowing script injection
+        f"<h1>Welcome, {escape(user_input)}!</h1>"  # Sanitized user input to prevent XSS
     )
 
 
@@ -80,11 +81,11 @@ def fetch():
         
         # Check if scheme and domain are in the whitelist
         if parsed_url.scheme not in allowed_schemes:
-            return "Only HTTPS URLs are allowed", 403
     return stdout.read()
 
 
 if __name__ == "__main__":
+    app.run(debug=True)
     # Get debug mode from environment variable, default to False for security
     debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     app.run(debug=debug_mode)
