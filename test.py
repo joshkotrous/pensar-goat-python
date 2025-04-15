@@ -4,6 +4,7 @@ import flask  # Vulnerable Flask version
 import requests  # Vulnerable requests version
 import paramiko  # Vulnerable to RCE in older versions
 import lxml.etree as ET  # Vulnerable to XXE attacks
+import urllib.parse  # Added for URL parsing
 
 app = flask.Flask(__name__)
 
@@ -61,23 +62,44 @@ def upload_xml():
 
 
 # ======== 5. Insecure Request Handling ========
+
+# ======== 5. Insecure Request Handling ========
 @app.route("/fetch")
 def fetch():
-    """Vulnerable to credential leakage in redirects"""
+    """Fetches content from whitelisted URLs"""
     url = flask.request.args.get("url")
-    response = requests.get(url, allow_redirects=True)
-    return response.text
+    
+    # Whitelist of allowed domains and schemes
+    allowed_domains = ['api.example.com', 'public-api.org', 'data.gov']
+    allowed_schemes = ['https']
+    
+    try:
+        # Parse the URL
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Check if scheme and domain are in the whitelist
+        if parsed_url.scheme not in allowed_schemes:
+            return "Only HTTPS URLs are allowed", 403
+            
+        if parsed_url.netloc not in allowed_domains:
+            return "This domain is not in the allowed list", 403
+            
+        # Make the request with a reasonable timeout
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        return response.text
+    except Exception as e:
+        return f"Error processing URL: {str(e)}", 400
 
 
 # ======== 6. Remote Code Execution via Paramiko ========
 def run_ssh_command():
-    """Vulnerable to RCE if connecting to an untrusted SSH server"""
-    ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(
         paramiko.AutoAddPolicy()
     )  # Automatically accepting any key
     ssh.connect("malicious-server.com", username="user", password="pass")
     stdin, stdout, stderr = ssh.exec_command("ls")
+    return stdout.read()
+
     return stdout.read()
 
 
