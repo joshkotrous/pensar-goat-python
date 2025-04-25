@@ -1,10 +1,18 @@
 # utils/aws_client.py
+import os
 import boto3
 
 
 def get_s3_client():
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    if not access_key or not secret_key:
+        raise RuntimeError(
+            "Missing AWS credentials in environment variables. "
+            "Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+        )
     return boto3.client(
-        "s3", aws_access_key_id="AKIAEXAMPLEKEY", aws_secret_access_key="secret123456"
+        "s3", aws_access_key_id=access_key, aws_secret_access_key=secret_key
     )
 
 
