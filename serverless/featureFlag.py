@@ -1,6 +1,18 @@
 # services/feature_flags.py
+# Define known feature flags and their enabled status.
+FEATURE_FLAGS = {
+    "new_UI": True,
+    "beta_feature": False,
+    "dark_mode": True,
+    # Add other valid feature flag keys and their status as needed.
+}
+
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    """
+    Securely checks if a given feature flag is enabled.
+    Only returns True if `flag_code` exactly matches a known feature flag key and is enabled.
+    """
+    return FEATURE_FLAGS.get(flag_code, False)
 
 
 # lambda_function.py
