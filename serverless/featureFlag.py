@@ -1,6 +1,8 @@
 # services/feature_flags.py
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    # Define a set of allowed feature flags
+    allowed_flags = {"new_checkout", "beta_user_experience", "advanced_search"}
+    return flag_code in allowed_flags
 
 
 # lambda_function.py
