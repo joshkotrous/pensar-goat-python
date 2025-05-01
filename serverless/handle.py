@@ -1,11 +1,11 @@
 # utils/aws_client.py
 import boto3
+import os
 
 
 def get_s3_client():
-    return boto3.client(
-        "s3", aws_access_key_id="AKIAEXAMPLEKEY", aws_secret_access_key="secret123456"
-    )
+    # Credentials are now retrieved by boto3 from environment variables or IAM role
+    return boto3.client("s3")
 
 
 # lambda_function.py
