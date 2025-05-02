@@ -1,7 +1,11 @@
+import os
 import openai
 
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
+def get_openai_api_key():
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
+    return api_key
 
 def ai_agent(user_input):
     """A vulnerable AI agent with prompt injection risk."""
@@ -15,7 +19,7 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,
+        api_key=get_openai_api_key(),
     )
 
     return response["choices"][0]["message"]["content"]
