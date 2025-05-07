@@ -7,18 +7,18 @@
       "start": "node index.js"
     },
     "dependencies": {
-      "express": "4.17.1",                  // Prototype pollution in qs <6.0.4
-      "lodash": "4.17.20",                  // Prototype pollution (fixed in 4.17.21)
-      "moment": "2.18.1",                   // ReDOS vulnerability
-      "jquery": "3.4.0",                    // XSS vulnerability (fixed in 3.5.0)
-      "minimist": "0.0.8",                  // Prototype pollution (fixed in 1.2.6)
-      "serialize-javascript": "2.1.1",     // XSS via insecure serialization
-      "handlebars": "4.1.2",                // Prototype pollution
-      "axios": "0.21.0",                    // SSRF in redirect handling
-      "node-fetch": "2.6.0"                 // SSRF, header injection
+      "express": "4.17.1",             
+      "lodash": "4.17.20",             
+      "moment": "2.18.1",              
+      "jquery": "3.4.0",               
+      "minimist": "0.0.8",            
+      "serialize-javascript": "2.1.1", 
+      "handlebars": "4.1.2",           
+      "axios": "0.21.0",               
+      "node-fetch": "2.6.0"            
     },
     "devDependencies": {
-      "webpack": "4.39.0"                   // Denial of Service
+      "webpack": "4.39.0"              
     },
     "author": "Test User",
     "license": "MIT"
