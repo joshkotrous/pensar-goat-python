@@ -1,6 +1,12 @@
+import os
+import sys
 import openai
 
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+if not OPENAI_API_KEY:
+    print("Error: OPENAI_API_KEY environment variable is not set. Please set it to your OpenAI API key before running this script.")
+    sys.exit(1)
 
 
 def ai_agent(user_input):
