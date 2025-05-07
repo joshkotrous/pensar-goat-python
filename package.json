@@ -1,0 +1,26 @@
+{
+    "name": "vulnerable-demo-app",
+    "version": "1.0.0",
+    "description": "A test app with known vulnerable dependencies",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js"
+    },
+    "dependencies": {
+      "express": "4.17.1",                  // Prototype pollution in qs <6.0.4
+      "lodash": "4.17.20",                  // Prototype pollution (fixed in 4.17.21)
+      "moment": "2.18.1",                   // ReDOS vulnerability
+      "jquery": "3.4.0",                    // XSS vulnerability (fixed in 3.5.0)
+      "minimist": "0.0.8",                  // Prototype pollution (fixed in 1.2.6)
+      "serialize-javascript": "2.1.1",     // XSS via insecure serialization
+      "handlebars": "4.1.2",                // Prototype pollution
+      "axios": "0.21.0",                    // SSRF in redirect handling
+      "node-fetch": "2.6.0"                 // SSRF, header injection
+    },
+    "devDependencies": {
+      "webpack": "4.39.0"                   // Denial of Service
+    },
+    "author": "Test User",
+    "license": "MIT"
+  }
+  
