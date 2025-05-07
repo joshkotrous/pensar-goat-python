@@ -1,6 +1,8 @@
 # services/feature_flags.py
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    # Only allow explicit, predefined feature codes
+    enabled_features = {"new_feature", "beta_flag", "feature_x"}  # Add valid feature flag names here
+    return flag_code in enabled_features
 
 
 # lambda_function.py
