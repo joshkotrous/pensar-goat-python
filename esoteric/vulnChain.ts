@@ -2,26 +2,64 @@ import express from "express";
 import yaml from "js-yaml";
 import cron from "node-cron";
 
+// Define the list of allowed action names and their corresponding safe implementations
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  say_hello: () => {
+    console.log("Hello from the scheduled job!");
+  },
+  // Add more allowed actions as needed
+};
+
 interface JobSpec {
   name: string;
   interval: string;
-  action: (...args: any[]) => void;
+  action: string; // Now, action is the name of the allowed action function
 }
 
-const jobs: Record<string, JobSpec> = {};
+type RegisteredJob = {
+  name: string;
+  interval: string;
+  action: (...args: any[]) => void;
+};
+
+const jobs: Record<string, RegisteredJob> = {};
 
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use yaml.load with FAILSAFE_SCHEMA to prevent !!js/function and similar tags
+    const obj = yaml.load(req.body, { schema: yaml.FAILSAFE_SCHEMA }) as any;
 
-    jobs[spec.name] = spec;
+    // Basic field validation
+    if (
+      typeof obj !== "object" ||
+      obj === null ||
+      typeof obj.name !== "string" ||
+      typeof obj.interval !== "string" ||
+      typeof obj.action !== "string"
+    ) {
+      return res.status(400).json({ error: "Malformed job spec" });
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    // Ensure action is in allowedActions
+    if (!allowedActions.hasOwnProperty(obj.action)) {
+      return res.status(400).json({ error: "Invalid or not permitted action" });
+    }
 
-    res.json({ ok: true, registered: spec.name });
+    // Create safe RegisteredJob object
+    const job: RegisteredJob = {
+      name: obj.name,
+      interval: obj.interval,
+      action: allowedActions[obj.action],
+    };
+
+    jobs[job.name] = job;
+
+    cron.schedule(job.interval, () => job.action());
+
+    res.json({ ok: true, registered: job.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
