@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -16,14 +15,28 @@ const defaultPreferences: Preferences = {
 
 const globalPreferences: Preferences = { ...defaultPreferences };
 
+// List of dangerous keys to prevent prototype pollution
+const unsafeKeys = ['__proto__', 'prototype', 'constructor'];
+
+function isUnsafeKey(key: string): boolean {
+  return unsafeKeys.includes(key);
+}
+
 function deepMerge<T extends Record<string, any>>(target: T, source: T): T {
   for (const key of Object.keys(source)) {
+    if (isUnsafeKey(key)) {
+      continue; // Skip unsafe keys to prevent prototype pollution
+    }
     if (
       typeof source[key] === 'object' &&
       source[key] !== null &&
       !Array.isArray(source[key])
     ) {
-      target[key] = deepMerge(target[key] ?? {}, source[key] as any);
+      // Ensure target[key] is an object for recursion
+      const targetValue = (typeof target[key] === 'object' && target[key] !== null)
+        ? target[key]
+        : {};
+      target[key] = deepMerge(targetValue, source[key] as any);
     } else {
       target[key] = source[key];
     }
