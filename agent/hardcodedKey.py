@@ -1,6 +1,8 @@
 import openai
+import os
+import sys
 
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 
 def ai_agent(user_input):
@@ -20,6 +22,10 @@ def ai_agent(user_input):
 
     return response["choices"][0]["message"]["content"]
 
+
+if OPENAI_API_KEY is None or not OPENAI_API_KEY.strip():
+    print("Error: The OPENAI_API_KEY environment variable is not set. Please set it before running this program.", file=sys.stderr)
+    sys.exit(1)
 
 while True:
     user_query = input("Ask the AI: ")
