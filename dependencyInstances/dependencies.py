@@ -1,11 +1,11 @@
 import sqlite3
 import yaml
-import flask
+from flask import Flask, request
 import requests
 import paramiko
 import lxml.etree as ET
 
-app = flask.Flask(__name__)
+app = Flask(__name__)
 
 conn = sqlite3.connect(":memory:")
 cursor = conn.cursor()
@@ -19,8 +19,8 @@ conn.commit()
 @app.route("/login")
 def login():
     """Vulnerable to SQL Injection"""
-    username = flask.request.args.get("username")
-    password = flask.request.args.get("password")
+    username = request.args.get("username")
+    password = request.args.get("password")
 
     query = (
         f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
@@ -36,7 +36,7 @@ def login():
 @app.route("/")
 def home():
     """Vulnerable to XSS"""
-    user_input = flask.request.args.get("name", "")
+    user_input = request.args.get("name", "")
     return f"<h1>Welcome, {user_input}!</h1>"
 
 
@@ -50,7 +50,7 @@ def load_config():
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
     """Vulnerable to XXE"""
-    xml_data = flask.request.data
+    xml_data = request.data
     parser = ET.XMLParser(resolve_entities=True)
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
@@ -59,7 +59,7 @@ def upload_xml():
 @app.route("/fetch")
 def fetch():
     """Vulnerable to credential leakage in redirects"""
-    url = flask.request.args.get("url")
+    url = request.args.get("url")
     response = requests.get(url, allow_redirects=True)
     return response.text
 
