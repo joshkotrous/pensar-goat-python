@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -16,8 +15,15 @@ const defaultPreferences: Preferences = {
 
 const globalPreferences: Preferences = { ...defaultPreferences };
 
+// List of property keys that can cause prototype pollution
+const POLLUTION_KEYS = ['__proto__', 'prototype', 'constructor'];
+
 function deepMerge<T extends Record<string, any>>(target: T, source: T): T {
   for (const key of Object.keys(source)) {
+    // Prevent Prototype Pollution by skipping dangerous keys
+    if (POLLUTION_KEYS.includes(key)) {
+      continue;
+    }
     if (
       typeof source[key] === 'object' &&
       source[key] !== null &&
