@@ -1,11 +1,16 @@
 # services/token_service.py
 import base64
-import pickle
+import json
 
 
 def decode_token(encoded):
-    raw = base64.b64decode(encoded)
-    return pickle.loads(raw)
+    try:
+        raw = base64.b64decode(encoded)
+        session = json.loads(raw.decode('utf-8'))
+        return session
+    except (ValueError, json.JSONDecodeError, TypeError, base64.binascii.Error):
+        # Handle decoding errors; in real-world usage, consider logging or customizing this response
+        return None
 
 
 # lambda_function.py
