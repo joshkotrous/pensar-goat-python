@@ -10,14 +10,14 @@
   "description": "",
   "dependencies": {
     "axios": "^0.21.0",
-    "express": "^4.17.1",
-    "handlebars": "^4.1.2",
-    "jquery": "^3.4.0",
-    "lodash": "^4.17.20",
-    "minimist": "^0.0.8",
+    "express": "^4.20.0",
+    "handlebars": "^4.7.7",
+    "jquery": "^3.5.0",
+    "lodash": "^4.17.21",
+    "minimist": "^0.2.4",
     "moment": "^2.18.1",
     "next": "^14.2.29",
-    "node-fetch": "^2.6.0",
+    "node-fetch": "^2.6.7",
     "serialize-javascript": "^2.1.1"
   }
 }
