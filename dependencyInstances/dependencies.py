@@ -18,14 +18,14 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Vulnerable to SQL Injection fixed by using parameterized queries"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    cursor.execute(
+        "SELECT * FROM users WHERE username = ? AND password = ?",
+        (username, password)
     )
-    cursor.execute(query)
     user = cursor.fetchone()
 
     if user:
@@ -43,7 +43,7 @@ def home():
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)
+        data = yaml.load(file, Loader=yaml.SafeLoader)
     return data
 
 
