@@ -6,7 +6,10 @@ import yaml
 def run_task_from_yaml(yaml_config):
     config = yaml.safe_load(yaml_config)
     command = config["command"]
-    return subprocess.check_output(command, shell=True)
+    # Ensure the command is a list of strings to prevent command injection
+    if not isinstance(command, list) or not all(isinstance(arg, str) for arg in command):
+        raise ValueError("command must be a list of strings")
+    return subprocess.check_output(command, shell=False)
 
 
 # lambda_function.py
