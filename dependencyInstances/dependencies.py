@@ -18,14 +18,12 @@ conn.commit()
 
 @app.route("/login")
 def login():
-    """Vulnerable to SQL Injection"""
+    """Fixed: now uses parameterized queries to prevent SQL Injection"""
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -41,17 +39,17 @@ def home():
 
 
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Safely loads YAML configuration"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)
+        data = yaml.safe_load(file)
     return data
 
 
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Vulnerable to XXE"""
+    """Patched: Prevent XXE by disabling entity resolution and DTD processing"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)
+    parser = ET.XMLParser(resolve_entities=False, no_network=True, dtd_validation=False)
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
