@@ -22,10 +22,8 @@ def login():
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -41,9 +39,9 @@ def home():
 
 
 def load_config():
-    """Vulnerable to Arbitrary Code Execution"""
+    """Safely load YAML configuration"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)
+        data = yaml.safe_load(file)
     return data
 
 
@@ -74,4 +72,4 @@ def run_ssh_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
