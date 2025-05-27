@@ -10,7 +10,7 @@
   "description": "",
   "dependencies": {
     "lodash": "^4.17.20",
-    "minimist": "^0.0.8",
+    "minimist": "^0.2.4",
     "moment": "^2.18.1"
   }
 }
