@@ -5,21 +5,47 @@ import cron from "node-cron";
 interface JobSpec {
   name: string;
   interval: string;
-  action: (...args: any[]) => void;
+  action: string;
 }
 
-const jobs: Record<string, JobSpec> = {};
+const jobs: Record<string, { name: string; interval: string; action: string }> = {};
 
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
+// Define a set of allowed actions if you want to allow only safe actions.
+// For this patch, we'll just log the action as a placeholder.
+// In a real system, map strings to trusted functions.
+function executeAction(action: string) {
+  // Implement safe, controlled actions only.
+  // Example: if (action === "say-hello") { console.log("Hello!"); }
+  // For now: just log for demonstration.
+  console.log(`Action executed: ${action}`);
+}
+
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use the json schema to prevent !!js/function execution
+    const spec = yaml.load(req.body, { schema: yaml.JSON_SCHEMA }) as any;
 
-    jobs[spec.name] = spec;
+    if (
+      typeof spec !== "object" ||
+      spec === null ||
+      Array.isArray(spec) ||
+      typeof spec.name !== "string" ||
+      typeof spec.interval !== "string" ||
+      typeof spec.action !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid job spec format" });
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    jobs[spec.name] = {
+      name: spec.name,
+      interval: spec.interval,
+      action: spec.action
+    };
+
+    cron.schedule(spec.interval, () => executeAction(spec.action));
 
     res.json({ ok: true, registered: spec.name });
   } catch (err: any) {
@@ -32,7 +58,7 @@ app.get("/run", (req, res) => {
   const job = jobs[name];
   if (!job) return res.status(404).json({ error: "unknown job" });
 
-  job.action();
+  executeAction(job.action);
   res.json({ ran: name });
 });
 
