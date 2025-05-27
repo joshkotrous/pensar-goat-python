@@ -1,6 +1,14 @@
 # services/feature_flags.py
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    # List of allowed feature flags
+    enabled_flags = {
+        "new_ui",
+        "beta_access",
+        "discount_enabled",
+        "advanced_search",
+        # Add other known flag names here as needed
+    }
+    return flag_code in enabled_flags
 
 
 # lambda_function.py
