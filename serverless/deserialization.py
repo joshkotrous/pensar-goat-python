@@ -1,11 +1,11 @@
 # services/token_service.py
 import base64
-import pickle
+import json
 
 
 def decode_token(encoded):
     raw = base64.b64decode(encoded)
-    return pickle.loads(raw)
+    return json.loads(raw.decode("utf-8"))
 
 
 # lambda_function.py
