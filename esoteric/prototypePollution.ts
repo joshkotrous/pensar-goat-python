@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -16,14 +15,28 @@ const defaultPreferences: Preferences = {
 
 const globalPreferences: Preferences = { ...defaultPreferences };
 
+const blockedKeys = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeKey(key: string): boolean {
+  return !blockedKeys.has(key);
+}
+
 function deepMerge<T extends Record<string, any>>(target: T, source: T): T {
   for (const key of Object.keys(source)) {
+    if (!isSafeKey(key)) {
+      continue;
+    }
     if (
       typeof source[key] === 'object' &&
       source[key] !== null &&
       !Array.isArray(source[key])
     ) {
-      target[key] = deepMerge(target[key] ?? {}, source[key] as any);
+      target[key] = deepMerge(
+        (typeof target[key] === 'object' && target[key] !== null && !Array.isArray(target[key]))
+          ? target[key]
+          : {},
+        source[key] as any
+      );
     } else {
       target[key] = source[key];
     }
