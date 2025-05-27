@@ -22,10 +22,9 @@ def login():
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    # Use parameterized query to prevent SQL Injection
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -43,15 +42,15 @@ def home():
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)
+        data = yaml.safe_load(file)
     return data
 
 
 @app.route("/upload_xml", methods=["POST"])
 def upload_xml():
-    """Vulnerable to XXE"""
+    """Vulnerable to XXE - FIXED: XXE resolved by disabling external entity resolution"""
     xml_data = flask.request.data
-    parser = ET.XMLParser(resolve_entities=True)
+    parser = ET.XMLParser(resolve_entities=False)
     tree = ET.fromstring(xml_data, parser)
     return ET.tostring(tree)
 
