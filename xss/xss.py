@@ -1,13 +1,15 @@
 from flask import Flask, request
+import html
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    """Vulnerable to reflected XSS."""
+    """Safe from reflected XSS."""
     user_input = request.args.get("name", "")
-    response = f"<h1>Welcome, {user_input}!</h1>"
+    safe_user_input = html.escape(user_input)
+    response = f"<h1>Welcome, {safe_user_input}!</h1>"
 
     return response
 
