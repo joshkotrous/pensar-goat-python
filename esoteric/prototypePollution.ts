@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -41,12 +40,12 @@ app.post('/preferences', (req: Request, res: Response) => {
 });
 
 app.use((req, _res, next) => {
-  req.user = { id: '123', isAdmin: false };
+  (req as any).user = { id: '123', isAdmin: false };
   next();
 });
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.isAdmin) return next();
+  if ((req as any).user?.isAdmin) return next();
   res.status(403).json({ error: 'Forbidden – admins only' });
 }
 
