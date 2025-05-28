@@ -5,23 +5,50 @@ import cron from "node-cron";
 interface JobSpec {
   name: string;
   interval: string;
-  action: (...args: any[]) => void;
+  action: string; // Changed to string to prevent function deserialization
 }
 
-const jobs: Record<string, JobSpec> = {};
+const jobs: Record<string, { name: string; interval: string; action: () => void }> = {};
+
+// Define a whitelist of allowed actions
+const allowedActions: Record<string, () => void> = {
+  "sayHello": () => { console.log("Hello from scheduled job!"); },
+  "printDate": () => { console.log("Current date/time:", new Date().toISOString()); }
+  // Add more predefined safe actions as desired
+};
 
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad instead of load to prevent function and code deserialization
+    const parsed = yaml.safeLoad(req.body) as JobSpec;
+    // Validate parsed object structure and fields
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.interval !== "string" ||
+      typeof parsed.action !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid job specification" });
+    }
+    // Only allow whitelisted actions
+    const actionFn = allowedActions[parsed.action];
+    if (!actionFn) {
+      return res.status(400).json({ error: "Unsupported or unknown action" });
+    }
 
-    jobs[spec.name] = spec;
+    jobs[parsed.name] = {
+      name: parsed.name,
+      interval: parsed.interval,
+      action: actionFn
+    };
 
-    cron.schedule(spec.interval, () => spec.action());
+    cron.schedule(parsed.interval, actionFn);
 
-    res.json({ ok: true, registered: spec.name });
+    res.json({ ok: true, registered: parsed.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
