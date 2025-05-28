@@ -1,11 +1,18 @@
 # services/token_service.py
 import base64
-import pickle
+import json
 
 
 def decode_token(encoded):
-    raw = base64.b64decode(encoded)
-    return pickle.loads(raw)
+    if not encoded:
+        raise ValueError("Missing session token")
+    try:
+        raw = base64.b64decode(encoded)
+        # JSON requires UTF-8 string
+        raw_str = raw.decode('utf-8')
+        return json.loads(raw_str)
+    except (base64.binascii.Error, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("Invalid or corrupt session token")
 
 
 # lambda_function.py
