@@ -1,6 +1,12 @@
 # services/feature_flags.py
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    # Replace eval with explicit mapping for feature flags
+    enabled_flags = {
+        "feature_x_enabled": True,
+        "feature_y_enabled": False,
+        # Add further valid feature flags as needed
+    }
+    return enabled_flags.get(flag_code, False)
 
 
 # lambda_function.py
