@@ -1,10 +1,8 @@
 import openai
-
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
+import os
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
+    """A more secure AI agent (avoids hardcoded credentials)."""
     prompt = f"""
     You are an AI assistant. Answer the following user query:
     
@@ -12,10 +10,16 @@ def ai_agent(user_input):
     AI:
     """
 
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Missing OpenAI API key. Please set the OPENAI_API_KEY environment variable."
+        )
+
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,
+        api_key=api_key,
     )
 
     return response["choices"][0]["message"]["content"]
