@@ -8,6 +8,20 @@ interface JobSpec {
   action: (...args: any[]) => void;
 }
 
+// Define a whitelist of allowed actions
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  "sayHello": () => {
+    console.log("Hello from job!");
+  },
+  // Add other allowed actions here as needed
+};
+
+interface UploadJobSpec {
+  name: string;
+  interval: string;
+  action: string; // refers to key in allowedActions
+}
+
 const jobs: Record<string, JobSpec> = {};
 
 const app = express();
@@ -15,13 +29,42 @@ app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad to prevent js/functions being created
+    const rawSpec = yaml.safeLoad(req.body);
 
-    jobs[spec.name] = spec;
+    if (typeof rawSpec !== "object" || rawSpec === null) {
+      throw new Error("Invalid job spec.");
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    const spec = rawSpec as Partial<UploadJobSpec>;
 
-    res.json({ ok: true, registered: spec.name });
+    // Validate required fields
+    if (
+      typeof spec.name !== "string" ||
+      typeof spec.interval !== "string" ||
+      typeof spec.action !== "string"
+    ) {
+      throw new Error("Invalid or missing fields: name, interval, or action.");
+    }
+
+    // Ensure the action is one of the allowed actions
+    const actionFn = allowedActions[spec.action];
+    if (typeof actionFn !== "function") {
+      throw new Error("Specified action is not permitted.");
+    }
+
+    // Build the sanitized JobSpec
+    const jobSpec: JobSpec = {
+      name: spec.name,
+      interval: spec.interval,
+      action: actionFn,
+    };
+
+    jobs[jobSpec.name] = jobSpec;
+
+    cron.schedule(jobSpec.interval, () => jobSpec.action());
+
+    res.json({ ok: true, registered: jobSpec.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
