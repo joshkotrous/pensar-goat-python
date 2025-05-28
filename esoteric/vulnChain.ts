@@ -10,12 +10,49 @@ interface JobSpec {
 
 const jobs: Record<string, JobSpec> = {};
 
+// Define a set of allowed actions
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  say_hello: () => {
+    console.log("Hello from job!");
+  },
+  do_nothing: () => {
+    // Intentionally does nothing
+  },
+  // You can define additional safe actions here
+};
+
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad to block !!js/function and similar tags
+    const raw = yaml.safeLoad
+      ? yaml.safeLoad(req.body)
+      : yaml.load(req.body, { schema: yaml.DEFAULT_SAFE_SCHEMA });
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      typeof raw.name !== "string" ||
+      typeof raw.interval !== "string" ||
+      typeof raw.action !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid job spec format" });
+    }
+
+    // Only allow predefined safe actions
+    const actionFn = allowedActions[raw.action];
+    if (!actionFn) {
+      return res
+        .status(400)
+        .json({ error: "Unsupported action. Allowed actions: " + Object.keys(allowedActions).join(", ") });
+    }
+
+    const spec: JobSpec = {
+      name: raw.name,
+      interval: raw.interval,
+      action: actionFn,
+    };
 
     jobs[spec.name] = spec;
 
