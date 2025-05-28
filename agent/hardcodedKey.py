@@ -4,17 +4,16 @@ OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
 def ai_agent(user_input):
-    """A vulnerable AI agent with prompt injection risk."""
-    prompt = f"""
-    You are an AI assistant. Answer the following user query:
-    
-    User: {user_input}
-    AI:
-    """
+    """A secure AI agent with prompt injection mitigated."""
+    system_message = "You are an AI assistant. Answer the following user query."
+    user_message = user_input
 
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message}
+        ],
         api_key=OPENAI_API_KEY,
     )
 
