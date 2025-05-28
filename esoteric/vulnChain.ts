@@ -8,20 +8,61 @@ interface JobSpec {
   action: (...args: any[]) => void;
 }
 
+type AllowedActionName = "logHello" | "logTime"; // Example allowed actions
+
+const allowedActions: Record<AllowedActionName, (...args: any[]) => void> = {
+  logHello: () => {
+    console.log("Hello from cron job!");
+  },
+  logTime: () => {
+    console.log("Current time:", new Date().toISOString());
+  },
+};
+
+type JobStoreSpec = {
+  name: string;
+  interval: string;
+  action: AllowedActionName;
+};
+
 const jobs: Record<string, JobSpec> = {};
 
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
+function isValidJobSpec(obj: any): obj is JobStoreSpec {
+  return (
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.name === "string" &&
+    typeof obj.interval === "string" &&
+    typeof obj.action === "string" &&
+    Object.prototype.hasOwnProperty.call(allowedActions, obj.action)
+  );
+}
+
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad to prevent function/regexp/class deserialization
+    const specObj = yaml.safeLoad(req.body);
 
-    jobs[spec.name] = spec;
+    if (!isValidJobSpec(specObj)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid job spec or unknown action" });
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    const jobSpec: JobSpec = {
+      name: specObj.name,
+      interval: specObj.interval,
+      action: allowedActions[specObj.action as AllowedActionName],
+    };
 
-    res.json({ ok: true, registered: spec.name });
+    jobs[jobSpec.name] = jobSpec;
+
+    cron.schedule(jobSpec.interval, () => jobSpec.action());
+
+    res.json({ ok: true, registered: jobSpec.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
