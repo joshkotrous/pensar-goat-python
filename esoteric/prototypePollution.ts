@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -16,14 +15,31 @@ const defaultPreferences: Preferences = {
 
 const globalPreferences: Preferences = { ...defaultPreferences };
 
+// List of keys that can lead to prototype pollution
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+
 function deepMerge<T extends Record<string, any>>(target: T, source: T): T {
   for (const key of Object.keys(source)) {
+    // Prevent prototype pollution by skipping dangerous keys
+    if (DANGEROUS_KEYS.includes(key)) {
+      continue;
+    }
     if (
       typeof source[key] === 'object' &&
       source[key] !== null &&
       !Array.isArray(source[key])
     ) {
-      target[key] = deepMerge(target[key] ?? {}, source[key] as any);
+      // Ensure the sub-target is an object and not a polluted property
+      if (
+        Object.prototype.hasOwnProperty.call(target, key) &&
+        typeof target[key] === 'object' &&
+        target[key] !== null &&
+        !Array.isArray(target[key])
+      ) {
+        target[key] = deepMerge(target[key], source[key] as any);
+      } else {
+        target[key] = deepMerge({}, source[key] as any);
+      }
     } else {
       target[key] = source[key];
     }
@@ -53,4 +69,6 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 const ROOT = '/var/data/';
 
 app.get('/internal/readFile', requireAdmin, async (req, res) => {
-  const { path = 'report.txt' } = req.query as { path?: string
+  const { path = 'report.txt' } = req.query as { path?: string };
+  // Implementation not shown
+});
