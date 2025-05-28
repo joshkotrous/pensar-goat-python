@@ -1,7 +1,6 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
-
+import path from 'path';
 
 interface Preferences {
   theme: 'light' | 'dark';
@@ -53,4 +52,30 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 const ROOT = '/var/data/';
 
 app.get('/internal/readFile', requireAdmin, async (req, res) => {
-  const { path = 'report.txt' } = req.query as { path?: string
+  const { path: userPath = 'report.txt' } = req.query as { path?: string };
+  try {
+    // Resolve the absolute path based on ROOT
+    const resolvedRoot = path.resolve(ROOT);
+    const resolvedPath = path.resolve(ROOT, userPath);
+
+    // Ensure the resolved path is within ROOT
+    if (
+      resolvedPath !== resolvedRoot &&
+      !resolvedPath.startsWith(resolvedRoot + path.sep)
+    ) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Attempt to read the file
+    const data = await fs.readFile(resolvedPath, 'utf8');
+    res.json({ file: userPath, contents: data });
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      res.status(404).json({ error: 'File not found' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+});
+
+export default app;
