@@ -5,8 +5,19 @@ import cron from "node-cron";
 interface JobSpec {
   name: string;
   interval: string;
-  action: (...args: any[]) => void;
+  action: string; // now refers to a safe function name
 }
+
+// Define a whitelist of allowed actions
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  hello: () => {
+    console.log("Hello! This is a safe job action.");
+  },
+  time: () => {
+    console.log("Current time:", new Date().toISOString());
+  },
+  // Add more safe actions as needed
+};
 
 const jobs: Record<string, JobSpec> = {};
 
@@ -15,13 +26,37 @@ app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad (or yaml.load with the 'FAILSAFE_SCHEMA' in newer js-yaml), disallow unsafe tags
+    const spec = yaml.safeLoad(req.body) as Partial<JobSpec>;
 
-    jobs[spec.name] = spec;
+    // Basic validation: check structure
+    if (
+      !spec ||
+      typeof spec !== "object" ||
+      typeof spec.name !== "string" ||
+      typeof spec.interval !== "string" ||
+      typeof spec.action !== "string"
+    ) {
+      throw new Error("Invalid job specification");
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    if (!(spec.action in allowedActions)) {
+      throw new Error("Unknown or unsafe action");
+    }
 
-    res.json({ ok: true, registered: spec.name });
+    const jobSpec: JobSpec = {
+      name: spec.name,
+      interval: spec.interval,
+      action: spec.action,
+    };
+
+    jobs[jobSpec.name] = jobSpec;
+
+    cron.schedule(jobSpec.interval, () => {
+      allowedActions[jobSpec.action]();
+    });
+
+    res.json({ ok: true, registered: jobSpec.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -32,7 +67,11 @@ app.get("/run", (req, res) => {
   const job = jobs[name];
   if (!job) return res.status(404).json({ error: "unknown job" });
 
-  job.action();
+  if (!(job.action in allowedActions)) {
+    return res.status(400).json({ error: "unknown or unsafe action" });
+  }
+
+  allowedActions[job.action]();
   res.json({ ran: name });
 });
 
