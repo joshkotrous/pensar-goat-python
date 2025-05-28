@@ -1,6 +1,16 @@
 # services/feature_flags.py
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    """
+    Returns whether a given feature is enabled.
+    Only allows checking against known, predefined feature names.
+    """
+    FEATURE_FLAGS = {
+        "featureA": True,
+        "featureB": False,
+        "featureC": True,
+        # Add valid feature names as required.
+    }
+    return FEATURE_FLAGS.get(flag_code, False)
 
 
 # lambda_function.py
