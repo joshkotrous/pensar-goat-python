@@ -13,9 +13,36 @@ const jobs: Record<string, JobSpec> = {};
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
+// Allow only 'print' as a supported action for demonstration
+function actionFromString(name: string): (...args: any[]) => void {
+  if (name === "print") {
+    return () => {
+      console.log(`[Job]: Executed job`);
+    };
+  }
+  throw new Error("Unsupported action type");
+}
+
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use FAILSAFE_SCHEMA to disable !!js/function and other dangerous tags
+    const raw = yaml.load(req.body, { schema: yaml.FAILSAFE_SCHEMA }) as Record<string, any>;
+
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      typeof raw.name !== "string" ||
+      typeof raw.interval !== "string" ||
+      typeof raw.action !== "string"
+    ) {
+      throw new Error("Invalid job spec: must include string fields 'name', 'interval', and 'action'");
+    }
+
+    const spec: JobSpec = {
+      name: raw.name,
+      interval: raw.interval,
+      action: actionFromString(raw.action), // only allow approved action types
+    };
 
     jobs[spec.name] = spec;
 
