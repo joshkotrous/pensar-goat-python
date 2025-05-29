@@ -22,10 +22,9 @@ def login():
     username = flask.request.args.get("username")
     password = flask.request.args.get("password")
 
-    query = (
-        f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    )
-    cursor.execute(query)
+    # Use parameterized query to prevent SQL injection
+    query = "SELECT * FROM users WHERE username = ? AND password = ?"
+    cursor.execute(query, (username, password))
     user = cursor.fetchone()
 
     if user:
@@ -43,7 +42,7 @@ def home():
 def load_config():
     """Vulnerable to Arbitrary Code Execution"""
     with open("config.yaml", "r") as file:
-        data = yaml.load(file, Loader=yaml.Loader)
+        data = yaml.safe_load(file)
     return data
 
 
