@@ -1,7 +1,6 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
-
+import path from 'path';
 
 interface Preferences {
   theme: 'light' | 'dark';
@@ -53,4 +52,25 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 const ROOT = '/var/data/';
 
 app.get('/internal/readFile', requireAdmin, async (req, res) => {
-  const { path = 'report.txt' } = req.query as { path?: string
+  const { path: userPath = 'report.txt' } = req.query as { path?: string };
+  if (typeof userPath !== 'string') {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+
+  // Prevent path traversal: join with ROOT, normalize, and verify containment
+  const normalizedPath = path.normalize(userPath).replace(/^(\\.{2}[\\/\\\\])+/, '');
+  const filePath = path.resolve(ROOT, normalizedPath);
+
+  if (!filePath.startsWith(path.resolve(ROOT))) {
+    return res.status(400).json({ error: 'Invalid file path' });
+  }
+
+  try {
+    const data = await fs.readFile(filePath, 'utf-8');
+    res.type('text/plain').send(data);
+  } catch (err) {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// ... other routes or middleware as needed
