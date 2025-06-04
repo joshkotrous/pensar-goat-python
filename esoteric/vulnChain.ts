@@ -5,8 +5,20 @@ import cron from "node-cron";
 interface JobSpec {
   name: string;
   interval: string;
+  actionName: string;
   action: (...args: any[]) => void;
 }
+
+// Define a whitelist of allowed actions
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  hello: () => {
+    console.log("Hello world from cron job!");
+  },
+  ping: () => {
+    console.log("Ping job executed");
+  },
+  // Add more allowed actions here as needed
+};
 
 const jobs: Record<string, JobSpec> = {};
 
@@ -15,7 +27,31 @@ app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad to prevent dangerous tag execution
+    const rawSpec = yaml.safeLoad(req.body);
+
+    // Validate rawSpec structure
+    if (
+      !rawSpec ||
+      typeof rawSpec !== "object" ||
+      typeof rawSpec["name"] !== "string" ||
+      typeof rawSpec["interval"] !== "string" ||
+      typeof rawSpec["actionName"] !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid job specification" });
+    }
+
+    const actionFn = allowedActions[rawSpec["actionName"]];
+    if (!actionFn) {
+      return res.status(400).json({ error: "Invalid or unauthorized actionName" });
+    }
+
+    const spec: JobSpec = {
+      name: rawSpec["name"],
+      interval: rawSpec["interval"],
+      actionName: rawSpec["actionName"],
+      action: actionFn,
+    };
 
     jobs[spec.name] = spec;
 
