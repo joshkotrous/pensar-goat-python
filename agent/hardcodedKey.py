@@ -1,6 +1,13 @@
+import os
 import openai
+import sys
 
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+def get_openai_api_key():
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        print("Error: The OpenAI API key is not set. Please set the OPENAI_API_KEY environment variable.")
+        sys.exit(1)
+    return api_key
 
 
 def ai_agent(user_input):
@@ -15,7 +22,7 @@ def ai_agent(user_input):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY,
+        api_key=get_openai_api_key(),
     )
 
     return response["choices"][0]["message"]["content"]
