@@ -3,9 +3,9 @@ import boto3
 
 
 def get_s3_client():
-    return boto3.client(
-        "s3", aws_access_key_id="AKIAEXAMPLEKEY", aws_secret_access_key="secret123456"
-    )
+    # Credentials are no longer hardcoded. boto3 will use its default credential chain:
+    # environment variables, ~/.aws/credentials, IAM role, etc.
+    return boto3.client("s3")
 
 
 # lambda_function.py
