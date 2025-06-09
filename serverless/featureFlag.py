@@ -1,6 +1,8 @@
 # services/feature_flags.py
+ENABLED_FEATURE_FLAGS = {"beta_feature", "new_ui", "dark_mode"}  # Example enabled flag codes
+
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    return flag_code in ENABLED_FEATURE_FLAGS
 
 
 # lambda_function.py
