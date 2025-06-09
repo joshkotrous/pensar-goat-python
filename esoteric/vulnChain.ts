@@ -15,7 +15,32 @@ app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Use safeLoad instead of load to prevent !!js/function and other unsafe tags
+    const parsed = yaml.safeLoad(req.body);
+
+    // Basic type and field validation
+    if (
+      typeof parsed !== "object" ||
+      !parsed ||
+      typeof parsed["name"] !== "string" ||
+      typeof parsed["interval"] !== "string" ||
+      typeof parsed["action"] !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid job spec: name, interval, action (as string) are required" });
+    }
+
+    // Create the job with action as a no-argument function that logs the action string
+    // or, you might process the command further depending on your needs,
+    // but most importantly: do not allow functions from user input
+    const spec: JobSpec = {
+      name: parsed["name"],
+      interval: parsed["interval"],
+      action: () => {
+        // Only allow action to be a string, run as log or placeholder (not evaluated JS)
+        // You could extend to restrict or process safe commands here if needed
+        console.log(`Job ${parsed["name"]} action: ${parsed["action"]}`);
+      },
+    };
 
     jobs[spec.name] = spec;
 
