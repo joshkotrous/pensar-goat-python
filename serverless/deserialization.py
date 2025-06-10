@@ -1,11 +1,12 @@
 # services/token_service.py
 import base64
-import pickle
+import json  # Pensar fix
 
 
 def decode_token(encoded):
+    # Pensar fix: Use JSON instead of pickle for safe deserialization
     raw = base64.b64decode(encoded)
-    return pickle.loads(raw)
+    return json.loads(raw)
 
 
 # lambda_function.py
