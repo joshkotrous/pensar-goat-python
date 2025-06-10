@@ -1,11 +1,11 @@
 # utils/aws_client.py
 import boto3
+# Pensar fix: Remove hard-coded AWS credentials. Use environment, config, or instance profile.
 
 
 def get_s3_client():
-    return boto3.client(
-        "s3", aws_access_key_id="AKIAEXAMPLEKEY", aws_secret_access_key="secret123456"
-    )
+    # boto3 will automatically use credentials from the environment or instance profile
+    return boto3.client("s3")
 
 
 # lambda_function.py
