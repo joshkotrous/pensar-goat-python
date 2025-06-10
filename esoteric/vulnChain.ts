@@ -2,6 +2,9 @@ import express from "express";
 import yaml from "js-yaml";
 import cron from "node-cron";
 
+// Pensar fix: Disallow deserialization of functions and unsafe YAML types.
+// Only permit a whitelist of server-defined actions.
+
 interface JobSpec {
   name: string;
   interval: string;
@@ -10,18 +13,49 @@ interface JobSpec {
 
 const jobs: Record<string, JobSpec> = {};
 
+// Whitelist of allowed actions by actionName
+const allowedActions: Record<string, (...args: any[]) => void> = {
+  // Define allowed/whitelisted jobs here. Example actions:
+  ping: () => {
+    console.log("Ping job ran at", new Date());
+  },
+  // Add other actions as needed
+};
+
 const app = express();
 app.use(express.text({ type: "text/plain" }));
 
 app.post("/upload", (req, res) => {
   try {
-    const spec = yaml.load(req.body) as JobSpec;
+    // Pensar fix: Use safeLoad to prevent function deserialization.
+    const spec = yaml.safeLoad(req.body) as { name?: unknown, interval?: unknown, actionName?: unknown };
 
-    jobs[spec.name] = spec;
+    // Strict input validation:
+    if (
+      !spec ||
+      typeof spec !== "object" ||
+      typeof spec.name !== "string" ||
+      !spec.name.trim() ||
+      typeof spec.interval !== "string" ||
+      !spec.interval.trim() ||
+      typeof spec.actionName !== "string" ||
+      !(spec.actionName in allowedActions)
+    ) {
+      return res.status(400).json({ error: "invalid spec: must specify name, interval, and valid actionName" });
+    }
 
-    cron.schedule(spec.interval, () => spec.action());
+    // Only assign server-defined actions, never from user input
+    const job: JobSpec = {
+      name: spec.name.trim(),
+      interval: spec.interval.trim(),
+      action: allowedActions[spec.actionName],
+    };
 
-    res.json({ ok: true, registered: spec.name });
+    jobs[job.name] = job;
+
+    cron.schedule(job.interval, () => job.action());
+
+    res.json({ ok: true, registered: job.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
