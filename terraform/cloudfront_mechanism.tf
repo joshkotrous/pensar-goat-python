@@ -8,7 +8,7 @@ resource "aws_cloudfront_distribution" "no_waf" {
 
   default_cache_behavior {
     target_origin_id = "s3-origin"
-    viewer_protocol_policy = "allow-all"  # ❗ allows HTTP
+    viewer_protocol_policy = "redirect-to-https"  # Enforces HTTPS, mitigates CWE-319
   }
 
   viewer_certificate {
