@@ -13,4 +13,5 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Pensar fix: Disable Flask debug mode to mitigate dangerous interactive debugger exposure.
+    app.run(debug=False)
