@@ -1,20 +1,9 @@
+# Pensar fix: Removed public 'acl' and public bucket policy to close open access.
+
 resource "aws_s3_bucket" "data_bucket" {
   bucket = "my-app-data"
-  acl    = "public-read" 
+  # acl    = "public-read" # Pensar fix: Removed to ensure bucket is private by default
 }
 
-resource "aws_s3_bucket_policy" "data_policy" {
-  bucket = aws_s3_bucket.data_bucket.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "PublicRead"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.data_bucket.arn}/*"
-      }
-    ]
-  })
-}
+# Pensar fix: Removed insecure aws_s3_bucket_policy that granted public read access
+# If public or shared access is needed, define a restricted policy with specific principals and actions.
