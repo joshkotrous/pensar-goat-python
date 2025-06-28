@@ -1,4 +1,3 @@
-
 import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 
@@ -39,6 +38,15 @@ app.post('/preferences', (req: Request, res: Response) => {
   deepMerge(globalPreferences, req.body as Preferences);
   res.json({ ok: true, prefs: globalPreferences });
 });
+
+// Attach user property to Request interface for TypeScript compatibility with Express >=4.20.0
+declare global {
+  namespace Express {
+    interface Request {
+      user?: { id: string; isAdmin: boolean };
+    }
+  }
+}
 
 app.use((req, _res, next) => {
   req.user = { id: '123', isAdmin: false };
