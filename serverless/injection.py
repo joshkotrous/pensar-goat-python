@@ -1,12 +1,15 @@
 # workflows/runner.py
 import subprocess
 import yaml
+import shlex
 
 
 def run_task_from_yaml(yaml_config):
     config = yaml.safe_load(yaml_config)
     command = config["command"]
-    return subprocess.check_output(command, shell=True)
+    # Parse the command string into a list of arguments to avoid shell=True
+    command_args = shlex.split(command)
+    return subprocess.check_output(command_args, shell=False)
 
 
 # lambda_function.py
