@@ -17,11 +17,17 @@ app.post("/upload", (req, res) => {
   try {
     const spec = yaml.load(req.body) as JobSpec;
 
+    // Validate that action is NOT a function to prevent remote code execution
+    if (typeof spec.action === 'function') {
+      throw new Error("Invalid job spec: action cannot be a function");
+    }
+
     jobs[spec.name] = spec;
 
-    cron.schedule(spec.interval, () => spec.action());
+    // Since action is not a function, we cannot schedule it directly
+    // Reject scheduling to avoid unsafe execution
+    return res.status(400).json({ error: "Job action must not be a function" });
 
-    res.json({ ok: true, registered: spec.name });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -37,3 +43,4 @@ app.get("/run", (req, res) => {
 });
 
 app.listen(4000, () => console.log("⚡ cron-as-code dev server on :4000"));
+
