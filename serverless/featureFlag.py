@@ -1,6 +1,14 @@
 # services/feature_flags.py
+# Define a safe set or dictionary of enabled feature flags
+ENABLED_FEATURE_FLAGS = {
+    "feature1": True,
+    "feature2": True,
+    # Add other feature flags here
+}
+
 def is_feature_enabled(flag_code: str) -> bool:
-    return eval(flag_code)
+    # Instead of eval, safely check if the flag_code is in the enabled flags
+    return ENABLED_FEATURE_FLAGS.get(flag_code, False)
 
 
 # lambda_function.py
