@@ -1,6 +1,7 @@
 import openai
+import os
 
-OPENAI_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 def ai_agent(user_input):
